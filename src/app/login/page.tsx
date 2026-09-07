@@ -11,7 +11,7 @@ export default function LoginPage() {
           </div>
           <h1 className="text-xl font-semibold text-slate-900">Mi Dashboard</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Ingresá con tu cuenta de Google para continuar.
+            Ingresá tu contraseña para continuar.
           </p>
         </div>
 
