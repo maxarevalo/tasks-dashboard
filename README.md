@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mi Dashboard
 
-## Getting Started
+Dashboard personal construido con **Next.js 16 (App Router)**, **NextAuth v5** (login con Google)
+y **Tailwind CSS v4**. Responsive: pensado para usarse cómodo desde el celular y desde escritorio.
 
-First, run the development server:
+## Cómo funciona
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+1. `/login` – ingreso con cuenta de Google.
+2. `/hub` – elegís entre **Personal** o **Trabajo**.
+3. Cada sección tiene su propio menú lateral (drawer en mobile) con módulos:
+   - **Personal**: Resumen · Estado contable · Tareas pendientes _(placeholders, se desarrollan de a poco)_
+   - **Trabajo**: todavía sin módulos (a definir más adelante).
+
+Toda ruta que no sea `/login` está protegida por `src/proxy.ts` (middleware de auth).
+
+## Estructura
+
+```
+src/
+  auth.ts                     Config de NextAuth (proveedor Google + allowlist opcional)
+  proxy.ts                    Protección de rutas
+  lib/nav.ts                  Definición de secciones y sus módulos  <- acá agregás módulos nuevos
+  lib/icons.ts                Mapa nombre -> icono (lucide-react)
+  components/
+    dashboard-shell.tsx       Layout responsive (sidebar + topbar + drawer mobile)
+    page-parts.tsx            PageHeader, Card, ComingSoon
+  app/
+    login/                    Pantalla de ingreso
+    hub/                      Selector Personal / Trabajo
+    personal/                 layout + página de cada módulo
+    trabajo/                  layout + placeholder
+    api/auth/[...nextauth]/   Handlers de NextAuth
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Configuración
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 1. Variables de entorno
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Copiá `.env.example` a `.env.local` y completá:
 
-## Learn More
+| Variable             | Descripción                                                                 |
+| -------------------- | -------------------------------------------------------------------------- |
+| `AUTH_SECRET`        | Secreto para firmar la sesión. Generalo con `npx auth secret`.            |
+| `AUTH_GOOGLE_ID`     | Client ID de Google OAuth.                                                 |
+| `AUTH_GOOGLE_SECRET` | Client Secret de Google OAuth.                                             |
+| `ALLOWED_EMAILS`     | Opcional. Correos autorizados separados por coma. Vacío = cualquier cuenta. |
 
-To learn more about Next.js, take a look at the following resources:
+### 2. Credenciales de Google
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. [Google Cloud Console](https://console.cloud.google.com/) → creá o elegí un proyecto.
+2. **APIs & Services → OAuth consent screen**: tipo "External", agregá tu correo como *test user*.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**.
+4. **Authorized redirect URIs**:
+   - `http://localhost:3000/api/auth/callback/google`
+   - (en producción) `https://TU-DOMINIO/api/auth/callback/google`
+5. Copiá el *Client ID* y *Client Secret* a `.env.local`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Desarrollo
 
-## Deploy on Vercel
+```bash
+npm install
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Abrí http://localhost:3000
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Build
+
+```bash
+npm run build
+npm start
+```
+
+## Agregar un módulo nuevo a "Personal"
+
+1. Creá la carpeta `src/app/personal/<mi-modulo>/page.tsx`.
+2. Si usa un icono nuevo, agregalo a `src/lib/icons.ts`.
+3. Sumá la entrada al array `nav` de `personal` en `src/lib/nav.ts`.
+
+Listo: aparece en el menú lateral automáticamente.
