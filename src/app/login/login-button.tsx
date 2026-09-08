@@ -1,25 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 
 export function LoginButton() {
   const [loading, setLoading] = useState(false);
   const [password, setPassword] = useState("");
+  const [error, setError] = useState(false);
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/hub";
-  const error = searchParams.get("error");
+
+  // Sólo rutas relativas: así el redirect se queda en el mismo host
+  // (localhost, IP de red local, etc.).
+  const rawCallback = searchParams.get("callbackUrl") ?? "/hub";
+  const callbackUrl = rawCallback.startsWith("/") ? rawCallback : "/hub";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(false);
+    const res = await signIn("password", { password, redirect: false });
+    if (res?.error) {
+      setError(true);
+      setLoading(false);
+      return;
+    }
+    router.push(callbackUrl);
+    router.refresh();
+  }
 
   return (
-    <form
-      className="space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setLoading(true);
-        signIn("password", { password, callbackUrl });
-      }}
-    >
+    <form className="space-y-3" onSubmit={handleSubmit}>
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-sm text-red-600">
           Contraseña incorrecta.

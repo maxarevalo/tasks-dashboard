@@ -56,7 +56,9 @@ Copiá `.env.example` a `.env.local` y completá:
    (`signIn("google", { callbackUrl })`).
 3. [Google Cloud Console](https://console.cloud.google.com/): OAuth consent screen (External,
    tu correo como *test user*) → Credentials → OAuth client ID → Web application.
-4. Redirect URI: `http://localhost:3000/api/auth/callback/google`
+4. Redirect URI: `http://localhost:2999/api/auth/callback/google`
+   (para entrar por IP de red agregá también `http://192.168.1.225:2999/api/auth/callback/google`
+   y seteá `AUTH_URL=http://192.168.1.225:2999` en `.env.local`).
 5. Cargá `AUTH_GOOGLE_ID` y `AUTH_GOOGLE_SECRET` en `.env.local`.
 
 ## Desarrollo
@@ -66,7 +68,35 @@ npm install
 npm run dev
 ```
 
-Abrí http://localhost:3000
+Abrí http://localhost:2999
+
+## Acceder desde el celular (misma red WiFi)
+
+1. **IP correcta de la PC.** Tu IP de red local es la del adaptador Wi-Fi
+   (algo tipo `192.168.1.225`), *no* las `172.x` que son adaptadores virtuales
+   (Hyper-V/WSL) y el celular no puede alcanzar. Para verla:
+
+   ```powershell
+   (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi").IPAddress
+   ```
+
+   Next también la imprime al arrancar (`- Network: http://192.168.1.225:2999`).
+
+2. **`AUTH_TRUST_HOST=true`** en `.env.local` (ya está) — sin esto NextAuth
+   rechaza el login cuando entrás por IP en vez de `localhost`.
+
+3. **Firewall de Windows.** Hay que permitir el puerto 2999 para entrada.
+   Una vez, en **PowerShell como administrador**:
+
+   ```powershell
+   New-NetFirewallRule -DisplayName "Next dev 2999" -Direction Inbound `
+     -Action Allow -Protocol TCP -LocalPort 2999 -Profile Any
+   ```
+
+4. En el celular abrí `http://192.168.1.225:2999` (reemplazá por tu IP).
+
+> Si cambiás de red, la IP cambia. El router suele darte siempre la misma por DHCP,
+> pero conviene fijar una reserva de IP en el router si vas a usarlo seguido.
 
 ## Build
 
