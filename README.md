@@ -1,7 +1,8 @@
 # Mi Dashboard
 
-Dashboard personal construido con **Next.js 16 (App Router)**, **NextAuth v5**
-y **Tailwind CSS v4**. Responsive: pensado para usarse cómodo desde el celular y desde escritorio.
+Dashboard personal construido con **Next.js 16 (App Router)**, **NextAuth v5**,
+**MongoDB (Mongoose)** y **Tailwind CSS v4**. Responsive: pensado para usarse
+cómodo desde el celular y desde escritorio.
 
 > **Login actual:** contraseña única definida en `APP_PASSWORD`. El login con Google
 > quedó preparado para reactivarse más adelante (ver más abajo).
@@ -16,21 +17,48 @@ y **Tailwind CSS v4**. Responsive: pensado para usarse cómodo desde el celular 
 
 Toda ruta que no sea `/login` está protegida por `src/proxy.ts` (middleware de auth).
 
+### Módulo: Gastos mensuales (`/personal/gastos`)
+
+- Vista por mes con navegación ‹ / › y "ir al mes actual".
+- 4 categorías: **Tarjetas · Préstamos · Gastos fijos · Previstos**.
+- **ARS y USD se llevan por separado** (nunca se convierte): todos los totales
+  muestran dos líneas.
+- **Cuotas**: al cargar una compra en cuotas elegís el mes de inicio, en qué
+  número de cuota estás y el total; se generan las cuotas restantes, una por mes.
+  Se pueden borrar de a una, "esta y las futuras", o todas.
+- **Tarjetas** (`/personal/gastos/tarjetas`): alta con día de cierre y vencimiento.
+- **Gastos fijos** (`/personal/gastos/fijos`): plantillas (desde/hasta, activo).
+  Cada mes, un botón "Cargar ahora" materializa los del período (idempotente).
+- Marcar pagado / pendiente por gasto.
+
+Código: modelos en `src/models/gastos.ts`, lecturas en
+`src/features/gastos/queries.ts`, mutaciones (Server Actions) en
+`src/features/gastos/actions.ts`.
+
+**Pendiente (próximas etapas):** ingresos por origen, ahorros ARS/USD,
+proyección de ahorro del mes siguiente, y gráficos.
+
 ## Estructura
 
 ```
 src/
   auth.ts                     Config de NextAuth (login por contraseña; Google preparado)
   proxy.ts                    Protección de rutas
-  lib/nav.ts                  Definición de secciones y sus módulos  <- acá agregás módulos nuevos
-  lib/icons.ts                Mapa nombre -> icono (lucide-react)
+  lib/
+    db.ts                     Conexión a MongoDB (cacheada)
+    nav.ts                    Secciones y módulos  <- acá agregás módulos nuevos
+    icons.ts                  Mapa nombre -> icono (lucide-react)
+    period.ts / money.ts      Helpers de meses y moneda
+  models/gastos.ts            Schemas Mongoose (Card, Expense, FixedExpense)
+  features/gastos/            queries.ts (lectura), actions.ts (Server Actions), types.ts
   components/
     dashboard-shell.tsx       Layout responsive (sidebar + topbar + drawer mobile)
+    ui.tsx / modal.tsx        Inputs, botones, modal
     page-parts.tsx            PageHeader, Card, ComingSoon
   app/
     login/                    Pantalla de ingreso
     hub/                      Selector Personal / Trabajo
-    personal/                 layout + página de cada módulo
+    personal/                 layout + módulos (gastos/, estado-contable/, tareas/)
     trabajo/                  layout + placeholder
     api/auth/[...nextauth]/   Handlers de NextAuth
 ```
@@ -44,6 +72,7 @@ Copiá `.env.example` a `.env.local` y completá:
 | Variable          | Descripción                                                     |
 | ----------------- | -------------------------------------------------------------- |
 | `AUTH_SECRET`     | Secreto para firmar la sesión. Generalo con `npx auth secret`. |
+| `MONGODB_URI`     | Conexión a MongoDB (Atlas o local), con el nombre de la base en la URI. |
 | `APP_PASSWORD`    | Contraseña única de acceso al dashboard.                       |
 | `APP_USER_NAME`   | Nombre que se muestra en la barra superior.                    |
 | `APP_USER_EMAIL`  | Email que se muestra en la barra superior.                     |

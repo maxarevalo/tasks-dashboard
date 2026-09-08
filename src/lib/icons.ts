@@ -5,6 +5,9 @@ import {
   Briefcase,
   User,
   Construction,
+  Receipt,
+  CreditCard,
+  Repeat,
   type LucideIcon,
 } from "lucide-react";
 
@@ -14,7 +17,10 @@ export type IconName =
   | "layout-dashboard"
   | "briefcase"
   | "user"
-  | "construction";
+  | "construction"
+  | "receipt"
+  | "credit-card"
+  | "repeat";
 
 export const iconMap: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -23,4 +29,7 @@ export const iconMap: Record<IconName, LucideIcon> = {
   briefcase: Briefcase,
   user: User,
   construction: Construction,
+  receipt: Receipt,
+  "credit-card": CreditCard,
+  repeat: Repeat,
 };

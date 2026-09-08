@@ -28,6 +28,7 @@ export const sections: Record<Section["key"], Section> = {
     accent: "from-emerald-500 to-teal-600",
     nav: [
       { label: "Resumen", href: "/personal", icon: "layout-dashboard" },
+      { label: "Gastos mensuales", href: "/personal/gastos", icon: "receipt" },
       { label: "Estado contable", href: "/personal/estado-contable", icon: "wallet" },
       { label: "Tareas pendientes", href: "/personal/tareas", icon: "list-checks" },
     ],
