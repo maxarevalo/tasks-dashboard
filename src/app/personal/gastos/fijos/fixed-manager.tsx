@@ -70,6 +70,7 @@ export function FixedManager({
                 {f.cardName ? ` · ${f.cardName}` : ""} · desde{" "}
                 {periodShortLabel(f.startPeriod)}
                 {f.endPeriod ? ` hasta ${periodShortLabel(f.endPeriod)}` : ""}
+                {f.autoGenerate ? " · automático" : " · manual"}
               </p>
             </div>
             <button
@@ -147,6 +148,7 @@ function FixedForm({
   const [cardId, setCardId] = useState("");
   const [startPeriod, setStartPeriod] = useState(currentPeriod());
   const [endPeriod, setEndPeriod] = useState("");
+  const [autoGenerate, setAutoGenerate] = useState(true);
 
   const [syncedFor, setSyncedFor] = useState<string | null>(null);
   const key = `${open}-${editing?.id ?? "new"}`;
@@ -160,6 +162,7 @@ function FixedForm({
     setCardId(editing?.cardId ?? "");
     setStartPeriod(editing?.startPeriod ?? currentPeriod());
     setEndPeriod(editing?.endPeriod ?? "");
+    setAutoGenerate(editing ? editing.autoGenerate : true);
   } else if (!open && syncedFor !== null) {
     setSyncedFor(null);
   }
@@ -175,6 +178,12 @@ function FixedForm({
       startPeriod,
       endPeriod: endPeriod || "",
       active: editing?.active ?? true,
+      autoGenerate,
+      applyFrom: autoGenerate
+        ? startPeriod > currentPeriod()
+          ? startPeriod
+          : currentPeriod()
+        : "",
     };
     exec(
       () =>
@@ -270,6 +279,22 @@ function FixedForm({
             />
           </Field>
         </div>
+
+        <label className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={autoGenerate}
+            onChange={(e) => setAutoGenerate(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300"
+          />
+          <span>
+            Cargarlo automáticamente en el mes actual y en todos los siguientes.
+            <span className="block text-xs text-slate-400">
+              Si lo destildás, queda como plantilla y lo cargás a mano cada mes.
+            </span>
+          </span>
+        </label>
+
         <ErrorText>{error}</ErrorText>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>

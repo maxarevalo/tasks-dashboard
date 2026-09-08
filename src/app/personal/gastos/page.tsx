@@ -7,6 +7,7 @@ import { MonthNav } from "./_components/month-nav";
 import { Summary } from "./_components/summary";
 import { ExpensesPanel } from "./_components/expenses-panel";
 import { GenerateFixedButton } from "./_components/generate-fixed-button";
+import { AutoFixedSync } from "./_components/auto-fixed-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,11 @@ export default async function GastosPage({
         </div>
       </div>
 
-      <GenerateFixedButton period={period} count={data.pendingFixedCount} />
+      <AutoFixedSync period={period} count={data.pendingAutoFixedCount} />
+      <GenerateFixedButton
+        period={period}
+        count={data.pendingManualFixedCount}
+      />
 
       <Summary summary={data.summary} />
 

@@ -28,7 +28,9 @@ Toda ruta que no sea `/login` está protegida por `src/proxy.ts` (middleware de 
   Se pueden borrar de a una, "esta y las futuras", o todas.
 - **Tarjetas** (`/personal/gastos/tarjetas`): alta con día de cierre y vencimiento.
 - **Gastos fijos** (`/personal/gastos/fijos`): plantillas (desde/hasta, activo).
-  Cada mes, un botón "Cargar ahora" materializa los del período (idempotente).
+  Al crearlas, una opción (tildada por defecto) las carga automáticamente en el
+  mes actual y en todos los siguientes. Si se destilda, quedan como plantilla y
+  se cargan a mano con el botón "Cargar ahora" de cada mes (idempotente).
 - Marcar pagado / pendiente por gasto.
 
 Código: modelos en `src/models/gastos.ts`, lecturas en

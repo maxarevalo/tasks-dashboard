@@ -46,6 +46,8 @@ const fixedExpenseSchema = new Schema(
     startPeriod: { type: String, required: true }, // YYYY-MM
     endPeriod: { type: String, default: null }, // null = indefinido
     active: { type: Boolean, default: true },
+    // Si es true, el gasto se materializa solo en cada mes que se visita.
+    autoGenerate: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

@@ -41,6 +41,7 @@ export type FixedExpenseDTO = {
   startPeriod: Period;
   endPeriod: Period | null;
   active: boolean;
+  autoGenerate: boolean;
 };
 
 export type CategoryTotals = Record<
@@ -60,8 +61,10 @@ export type MonthData = {
   expenses: ExpenseDTO[];
   cards: CardDTO[];
   summary: MonthSummary;
-  /** Cantidad de gastos fijos activos sin materializar en este período. */
-  pendingFixedCount: number;
+  /** Gastos fijos manuales sin cargar en este mes (se muestra el banner). */
+  pendingManualFixedCount: number;
+  /** Gastos fijos automáticos sin cargar (se materializan solos). */
+  pendingAutoFixedCount: number;
 };
 
 export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {

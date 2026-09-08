@@ -88,7 +88,71 @@ const fixedInput = z.object({
   startPeriod: period,
   endPeriod: period.optional().or(z.literal("").transform(() => undefined)),
   active: z.boolean().optional(),
+  autoGenerate: z.boolean().optional(),
 });
+
+const createFixedInput = fixedInput.extend({
+  /** Materializa el gasto en el rango [applyFrom .. horizonte] al crearlo. */
+  applyFrom: period.optional().or(z.literal("").transform(() => undefined)),
+});
+
+/** Meses hacia adelante que se materializan de una para gastos automáticos. */
+const AUTO_FIXED_HORIZON = 24;
+
+type FixedTemplateLike = {
+  _id: unknown;
+  description: string;
+  amount: number;
+  currency: string;
+  category?: string;
+  cardId?: unknown;
+  startPeriod: string;
+  endPeriod?: string | null;
+};
+
+/** Crea las filas de Expense faltantes para una plantilla en [from..to]. */
+async function materializeFixedRange(
+  template: FixedTemplateLike,
+  from: string,
+  to: string,
+): Promise<void> {
+  const start = from > template.startPeriod ? from : template.startPeriod;
+  const end =
+    template.endPeriod && template.endPeriod < to ? template.endPeriod : to;
+  if (start > end) return;
+
+  const periods: string[] = [];
+  for (let p = start; p <= end; p = addMonths(p, 1)) periods.push(p);
+
+  const existing = await Expense.find({
+    userId: OWNER_ID,
+    fixedId: template._id,
+    period: { $in: periods },
+  })
+    .select("period")
+    .lean();
+  const done = new Set(existing.map((e) => String(e.period)));
+
+  const rows = periods
+    .filter((p) => !done.has(p))
+    .map((p) => ({
+      userId: OWNER_ID,
+      period: p,
+      category: template.category ?? "fijo",
+      description: template.description,
+      amount: template.amount,
+      currency: template.currency,
+      cardId: template.cardId ?? undefined,
+      source: "fixed" as const,
+      fixedId: template._id,
+    }));
+
+  if (rows.length) {
+    await Expense.insertMany(rows, { ordered: false }).catch((e) => {
+      if ((e as { code?: number }).code !== 11000) throw e;
+    });
+  }
+}
 
 /* ------------------------------ Expenses ------------------------------- */
 
@@ -209,24 +273,46 @@ export async function setCardArchived(
 /* ---------------------------- Fixed expenses --------------------------- */
 
 export async function createFixedExpense(
-  input: z.input<typeof fixedInput>,
+  input: z.input<typeof createFixedInput>,
 ): Promise<ActionResult> {
   return run(async () => {
-    const data = fixedInput.parse(input);
-    await FixedExpense.create({ userId: OWNER_ID, ...data });
+    const { applyFrom, ...data } = createFixedInput.parse(input);
+    const doc = await FixedExpense.create({ userId: OWNER_ID, ...data });
+
+    if (applyFrom) {
+      await materializeFixedRange(
+        doc.toObject() as unknown as FixedTemplateLike,
+        applyFrom,
+        addMonths(applyFrom, AUTO_FIXED_HORIZON),
+      );
+    }
   });
 }
 
 export async function updateFixedExpense(
   id: string,
-  input: z.input<typeof fixedInput>,
+  input: z.input<typeof createFixedInput>,
 ): Promise<ActionResult> {
   return run(async () => {
-    const data = fixedInput.parse(input);
+    const { applyFrom, ...data } = createFixedInput.parse(input);
     await FixedExpense.updateOne(
       { _id: id, userId: OWNER_ID },
       { $set: { ...data, endPeriod: data.endPeriod ?? null } },
     );
+
+    if (applyFrom) {
+      const doc = await FixedExpense.findOne({
+        _id: id,
+        userId: OWNER_ID,
+      }).lean();
+      if (doc) {
+        await materializeFixedRange(
+          doc as unknown as FixedTemplateLike,
+          applyFrom,
+          addMonths(applyFrom, AUTO_FIXED_HORIZON),
+        );
+      }
+    }
   });
 }
 
@@ -239,14 +325,17 @@ export async function deleteFixedExpense(id: string): Promise<ActionResult> {
 /** Crea los gastos del mes a partir de las plantillas de gastos fijos activas. */
 export async function generateFixedForPeriod(
   targetPeriod: string,
+  onlyAuto = false,
 ): Promise<ActionResult> {
   return run(async () => {
     const p = period.parse(targetPeriod);
-    const templates = await FixedExpense.find({
+    const templateFilter: Record<string, unknown> = {
       userId: OWNER_ID,
       active: true,
       startPeriod: { $lte: p },
-    }).lean();
+    };
+    if (onlyAuto) templateFilter.autoGenerate = true;
+    const templates = await FixedExpense.find(templateFilter).lean();
 
     const existing = await Expense.find({
       userId: OWNER_ID,

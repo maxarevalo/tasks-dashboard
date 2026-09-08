@@ -70,6 +70,7 @@ function mapFixed(doc: Lean, cardName: string | null): FixedExpenseDTO {
     startPeriod: str(doc.startPeriod),
     endPeriod: (doc.endPeriod as string) ?? null,
     active: Boolean(doc.active),
+    autoGenerate: Boolean(doc.autoGenerate),
   };
 }
 
@@ -130,20 +131,21 @@ export async function getMonthData(period: Period): Promise<MonthData> {
   const materializedFixedIds = new Set(
     expenses.filter((e) => e.fixedId).map((e) => e.fixedId as string),
   );
-  const pendingFixedCount = fixedDocs.filter(
+  const pending = fixedDocs.filter(
     (f) =>
       periodInRange(
         period,
         String(f.startPeriod),
         (f.endPeriod as string) ?? null,
       ) && !materializedFixedIds.has(String(f._id)),
-  ).length;
+  );
 
   return {
     period,
     expenses,
     cards: cards.filter((c) => !c.archived),
     summary: buildSummary(expenses),
-    pendingFixedCount,
+    pendingManualFixedCount: pending.filter((f) => !f.autoGenerate).length,
+    pendingAutoFixedCount: pending.filter((f) => f.autoGenerate).length,
   };
 }
