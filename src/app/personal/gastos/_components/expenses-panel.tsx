@@ -1,16 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Plus,
-  MoreVertical,
-  Check,
-  Pencil,
-  Trash2,
-  CreditCard,
-  Repeat,
-} from "lucide-react";
+import { Plus, Check, Pencil, Trash2, CreditCard, Repeat } from "lucide-react";
 import { Button } from "@/components/ui";
+import { RowMenu, type RowMenuItem } from "@/components/row-menu";
 import { formatMoney } from "@/lib/money";
 import { useAction } from "@/features/gastos/use-action";
 import { setExpensePaid, deleteExpense } from "@/features/gastos/actions";
@@ -100,12 +93,39 @@ function ExpenseRow({
   onEdit: () => void;
 }) {
   const { pending, exec } = useAction();
-  const [menu, setMenu] = useState(false);
 
-  const del = (scope: "one" | "group-future" | "group-all") => {
-    setMenu(false);
+  const del = (scope: "one" | "group-future" | "group-all") =>
     exec(() => deleteExpense(e.id, scope));
-  };
+
+  const menuItems: RowMenuItem[] = [
+    {
+      label: "Editar",
+      icon: <Pencil className="h-3.5 w-3.5" />,
+      onClick: onEdit,
+    },
+    {
+      label: e.groupId ? "Borrar esta cuota" : "Borrar",
+      icon: <Trash2 className="h-3.5 w-3.5" />,
+      danger: true,
+      onClick: () => del("one"),
+    },
+    ...(e.groupId
+      ? [
+          {
+            label: "Borrar esta y futuras",
+            icon: <Trash2 className="h-3.5 w-3.5" />,
+            danger: true,
+            onClick: () => del("group-future"),
+          },
+          {
+            label: "Borrar todas las cuotas",
+            icon: <Trash2 className="h-3.5 w-3.5" />,
+            danger: true,
+            onClick: () => del("group-all"),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <li className="flex items-center gap-3 px-4 py-3">
@@ -155,60 +175,8 @@ function ExpenseRow({
         <p className="text-[10px] text-slate-400">{e.currency}</p>
       </div>
 
-      <div className="relative shrink-0">
-        <button
-          type="button"
-          onClick={() => setMenu((v) => !v)}
-          className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-          aria-label="Opciones"
-        >
-          <MoreVertical className="h-4 w-4" />
-        </button>
-        {menu && (
-          <>
-            <div
-              className="fixed inset-0 z-10"
-              onClick={() => setMenu(false)}
-            />
-            <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
-              <button
-                type="button"
-                onClick={() => {
-                  setMenu(false);
-                  onEdit();
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50"
-              >
-                <Pencil className="h-3.5 w-3.5" /> Editar
-              </button>
-              <button
-                type="button"
-                onClick={() => del("one")}
-                className="flex w-full items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Borrar {e.groupId ? "esta cuota" : ""}
-              </button>
-              {e.groupId && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => del("group-future")}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Borrar esta y futuras
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => del("group-all")}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Borrar todas las cuotas
-                  </button>
-                </>
-              )}
-            </div>
-          </>
-        )}
+      <div className="shrink-0">
+        <RowMenu items={menuItems} />
       </div>
     </li>
   );
