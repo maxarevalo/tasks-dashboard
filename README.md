@@ -31,6 +31,15 @@ Toda ruta que no sea `/login` está protegida por `src/proxy.ts` (middleware de 
   Al crearlas, una opción (tildada por defecto) las carga automáticamente en el
   mes actual y en todos los siguientes. Si se destilda, quedan como plantilla y
   se cargan a mano con el botón "Cargar ahora" de cada mes (idempotente).
+  - **Editar con vigencia**: desde el menú (…) de un gasto fijo en la vista
+    mensual, "Editar el gasto fijo…" propaga el cambio (ej. aumento de monto)
+    desde el mes elegido en adelante. Los meses anteriores, los pagados y los
+    editados a mano no se tocan.
+  - **Quitar de un mes puntual**: no se vuelve a generar en ese mes
+    (`skipPeriods`). Se ve en el manager de fijos.
+  - **Aviso de fin**: si un fijo no continúa el mes siguiente (fecha "hasta"
+    alcanzada, pausado o plantilla borrada), la fila muestra un badge y el mes
+    un banner.
 - Marcar pagado / pendiente por gasto.
 
 Código: modelos en `src/models/gastos.ts`, lecturas en
