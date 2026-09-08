@@ -48,6 +48,8 @@ const fixedExpenseSchema = new Schema(
     active: { type: Boolean, default: true },
     // Si es true, el gasto se materializa solo en cada mes que se visita.
     autoGenerate: { type: Boolean, default: false },
+    // Meses (YYYY-MM) en los que este fijo fue quitado a mano.
+    skipPeriods: { type: [String], default: [] },
   },
   { timestamps: true },
 );
@@ -83,6 +85,9 @@ const expenseSchema = new Schema(
       total: { type: Number },
     },
     fixedId: { type: Schema.Types.ObjectId, ref: "FixedExpense" },
+    // true si la fila (materializada de un fijo) fue editada a mano: no se
+    // pisa al propagar cambios de la plantilla.
+    overridden: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

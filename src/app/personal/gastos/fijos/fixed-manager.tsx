@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Power } from "lucide-react";
-import { Modal } from "@/components/modal";
-import { Field, Input, Select, Button, ErrorText } from "@/components/ui";
+import { Plus, Pencil, Trash2, Power, CircleSlash } from "lucide-react";
+import { Button } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
 import { periodShortLabel, currentPeriod } from "@/lib/period";
 import { useAction } from "@/features/gastos/use-action";
 import {
-  createFixedExpense,
   updateFixedExpense,
   deleteFixedExpense,
 } from "@/features/gastos/actions";
 import type { CardDTO, FixedExpenseDTO } from "@/features/gastos/types";
+import { FixedForm } from "../_components/fixed-form";
 
 export function FixedManager({
   fixed,
@@ -24,6 +23,7 @@ export function FixedManager({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FixedExpenseDTO | null>(null);
   const { exec } = useAction();
+  const now = currentPeriod();
 
   return (
     <div className="space-y-4">
@@ -39,11 +39,6 @@ export function FixedManager({
         </Button>
       </div>
 
-      <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-        Los gastos fijos son plantillas. Cada mes, desde la pantalla de gastos,
-        confirmás con un botón que se carguen los del período.
-      </p>
-
       {fixed.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
           Todavía no cargaste gastos fijos.
@@ -51,72 +46,100 @@ export function FixedManager({
       )}
 
       <ul className="space-y-2">
-        {fixed.map((f) => (
-          <li
-            key={f.id}
-            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
-          >
-            <div className="min-w-0 flex-1">
-              <p
-                className={`truncate text-sm font-medium ${
-                  f.active ? "text-slate-900" : "text-slate-400"
+        {fixed.map((f) => {
+          const finished = f.endPeriod != null && f.endPeriod < now;
+          return (
+            <li
+              key={f.id}
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p
+                  className={`flex items-center gap-2 truncate text-sm font-medium ${
+                    f.active && !finished ? "text-slate-900" : "text-slate-400"
+                  }`}
+                >
+                  {f.description}
+                  {!f.active && (
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
+                      Pausado
+                    </span>
+                  )}
+                  {finished && (
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
+                      Finalizó
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {formatMoney(f.amount, f.currency)} {f.currency} ·{" "}
+                  {f.category === "prestamo" ? "Préstamo" : "Fijo"}
+                  {f.cardName ? ` · ${f.cardName}` : ""} · desde{" "}
+                  {periodShortLabel(f.startPeriod)}
+                  {f.endPeriod
+                    ? ` hasta ${periodShortLabel(f.endPeriod)}`
+                    : ""}
+                  {f.autoGenerate ? " · automático" : " · manual"}
+                </p>
+                {f.skipPeriods.length > 0 && (
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-amber-600">
+                    <CircleSlash className="h-3 w-3" />
+                    Salteado en{" "}
+                    {f.skipPeriods
+                      .slice()
+                      .sort()
+                      .map(periodShortLabel)
+                      .join(", ")}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  exec(() =>
+                    updateFixedExpense(f.id, {
+                      description: f.description,
+                      amount: f.amount,
+                      currency: f.currency,
+                      category: f.category,
+                      cardId: f.cardId ?? "",
+                      startPeriod: f.startPeriod,
+                      endPeriod: f.endPeriod ?? "",
+                      autoGenerate: f.autoGenerate,
+                      active: !f.active,
+                    }),
+                  )
+                }
+                className={`grid h-8 w-8 place-items-center rounded-lg hover:bg-slate-100 ${
+                  f.active ? "text-emerald-600" : "text-slate-300"
                 }`}
+                aria-label={f.active ? "Pausar" : "Reactivar"}
+                title={f.active ? "Pausar" : "Reactivar"}
               >
-                {f.description}
-              </p>
-              <p className="text-xs text-slate-500">
-                {formatMoney(f.amount, f.currency)} {f.currency} ·{" "}
-                {f.category === "prestamo" ? "Préstamo" : "Fijo"}
-                {f.cardName ? ` · ${f.cardName}` : ""} · desde{" "}
-                {periodShortLabel(f.startPeriod)}
-                {f.endPeriod ? ` hasta ${periodShortLabel(f.endPeriod)}` : ""}
-                {f.autoGenerate ? " · automático" : " · manual"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                exec(() =>
-                  updateFixedExpense(f.id, {
-                    description: f.description,
-                    amount: f.amount,
-                    currency: f.currency,
-                    category: f.category,
-                    cardId: f.cardId ?? "",
-                    startPeriod: f.startPeriod,
-                    endPeriod: f.endPeriod ?? "",
-                    active: !f.active,
-                  }),
-                )
-              }
-              className={`grid h-8 w-8 place-items-center rounded-lg hover:bg-slate-100 ${
-                f.active ? "text-emerald-600" : "text-slate-300"
-              }`}
-              aria-label={f.active ? "Desactivar" : "Activar"}
-            >
-              <Power className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(f);
-                setOpen(true);
-              }}
-              className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              aria-label="Editar"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => exec(() => deleteFixedExpense(f.id))}
-              className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
-              aria-label="Borrar"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </li>
-        ))}
+                <Power className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(f);
+                  setOpen(true);
+                }}
+                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Editar"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => exec(() => deleteFixedExpense(f.id))}
+                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                aria-label="Borrar"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          );
+        })}
       </ul>
 
       <FixedForm
@@ -126,185 +149,5 @@ export function FixedManager({
         cards={cards}
       />
     </div>
-  );
-}
-
-function FixedForm({
-  open,
-  onClose,
-  editing,
-  cards,
-}: {
-  open: boolean;
-  onClose: () => void;
-  editing: FixedExpenseDTO | null;
-  cards: CardDTO[];
-}) {
-  const { pending, error, exec, setError } = useAction();
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState<"ARS" | "USD">("ARS");
-  const [category, setCategory] = useState<"fijo" | "prestamo">("fijo");
-  const [cardId, setCardId] = useState("");
-  const [startPeriod, setStartPeriod] = useState(currentPeriod());
-  const [endPeriod, setEndPeriod] = useState("");
-  const [autoGenerate, setAutoGenerate] = useState(true);
-
-  const [syncedFor, setSyncedFor] = useState<string | null>(null);
-  const key = `${open}-${editing?.id ?? "new"}`;
-  if (open && syncedFor !== key) {
-    setSyncedFor(key);
-    setError(null);
-    setDescription(editing?.description ?? "");
-    setAmount(editing ? String(editing.amount) : "");
-    setCurrency(editing?.currency ?? "ARS");
-    setCategory(editing?.category ?? "fijo");
-    setCardId(editing?.cardId ?? "");
-    setStartPeriod(editing?.startPeriod ?? currentPeriod());
-    setEndPeriod(editing?.endPeriod ?? "");
-    setAutoGenerate(editing ? editing.autoGenerate : true);
-  } else if (!open && syncedFor !== null) {
-    setSyncedFor(null);
-  }
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const payload = {
-      description,
-      amount: Number(amount),
-      currency,
-      category,
-      cardId: category === "prestamo" ? "" : cardId,
-      startPeriod,
-      endPeriod: endPeriod || "",
-      active: editing?.active ?? true,
-      autoGenerate,
-      applyFrom: autoGenerate
-        ? startPeriod > currentPeriod()
-          ? startPeriod
-          : currentPeriod()
-        : "",
-    };
-    exec(
-      () =>
-        editing
-          ? updateFixedExpense(editing.id, payload)
-          : createFixedExpense(payload),
-      onClose,
-    );
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={editing ? "Editar gasto fijo" : "Nuevo gasto fijo"}
-    >
-      <form onSubmit={submit} className="space-y-4">
-        <Field label="Descripción">
-          <Input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Ej: Alquiler, Spotify, Cuota del auto…"
-            required
-            autoFocus
-          />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Monto">
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-            />
-          </Field>
-          <Field label="Moneda">
-            <Select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value as "ARS" | "USD")}
-            >
-              <option value="ARS">ARS</option>
-              <option value="USD">USD</option>
-            </Select>
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Tipo">
-            <Select
-              value={category}
-              onChange={(e) =>
-                setCategory(e.target.value as "fijo" | "prestamo")
-              }
-            >
-              <option value="fijo">Gasto fijo</option>
-              <option value="prestamo">Préstamo</option>
-            </Select>
-          </Field>
-          {category === "fijo" && (
-            <Field label="Tarjeta" hint="Opcional">
-              <Select
-                value={cardId}
-                onChange={(e) => setCardId(e.target.value)}
-              >
-                <option value="">Sin tarjeta</option>
-                {cards
-                  .filter((c) => !c.archived)
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-              </Select>
-            </Field>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Desde">
-            <Input
-              type="month"
-              value={startPeriod}
-              onChange={(e) =>
-                setStartPeriod(e.target.value || currentPeriod())
-              }
-            />
-          </Field>
-          <Field label="Hasta" hint="Vacío = indefinido">
-            <Input
-              type="month"
-              value={endPeriod}
-              onChange={(e) => setEndPeriod(e.target.value)}
-            />
-          </Field>
-        </div>
-
-        <label className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={autoGenerate}
-            onChange={(e) => setAutoGenerate(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300"
-          />
-          <span>
-            Cargarlo automáticamente en el mes actual y en todos los siguientes.
-            <span className="block text-xs text-slate-400">
-              Si lo destildás, queda como plantilla y lo cargás a mano cada mes.
-            </span>
-          </span>
-        </label>
-
-        <ErrorText>{error}</ErrorText>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={pending}>
-            {pending ? "Guardando…" : "Guardar"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
   );
 }

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { connectToDatabase } from "@/lib/db";
 import { Card, Expense, FixedExpense, OWNER_ID } from "@/models/gastos";
-import { addMonths, isValidPeriod } from "@/lib/period";
+import { addMonths, currentPeriod as currentPeriodValue, isValidPeriod } from "@/lib/period";
 import type { ActionResult } from "./types";
 
 const GASTOS_PATH = "/personal/gastos";
@@ -108,21 +108,42 @@ type FixedTemplateLike = {
   cardId?: unknown;
   startPeriod: string;
   endPeriod?: string | null;
+  skipPeriods?: string[];
 };
 
-/** Crea las filas de Expense faltantes para una plantilla en [from..to]. */
+/**
+ * Sincroniza las filas de Expense de una plantilla en [from..to]:
+ * crea las que faltan y, si `updateExisting`, pisa las que no estén pagadas
+ * ni editadas a mano con los valores actuales de la plantilla.
+ */
 async function materializeFixedRange(
   template: FixedTemplateLike,
   from: string,
   to: string,
+  {
+    updateExisting = false,
+    createMissing = true,
+  }: { updateExisting?: boolean; createMissing?: boolean } = {},
 ): Promise<void> {
   const start = from > template.startPeriod ? from : template.startPeriod;
   const end =
     template.endPeriod && template.endPeriod < to ? template.endPeriod : to;
   if (start > end) return;
 
+  const skip = new Set(template.skipPeriods ?? []);
   const periods: string[] = [];
-  for (let p = start; p <= end; p = addMonths(p, 1)) periods.push(p);
+  for (let p = start; p <= end; p = addMonths(p, 1)) {
+    if (!skip.has(p)) periods.push(p);
+  }
+  if (periods.length === 0) return;
+
+  const values = {
+    category: template.category ?? "fijo",
+    description: template.description,
+    amount: template.amount,
+    currency: template.currency,
+    cardId: template.cardId ?? undefined,
+  };
 
   const existing = await Expense.find({
     userId: OWNER_ID,
@@ -133,24 +154,35 @@ async function materializeFixedRange(
     .lean();
   const done = new Set(existing.map((e) => String(e.period)));
 
-  const rows = periods
-    .filter((p) => !done.has(p))
-    .map((p) => ({
-      userId: OWNER_ID,
-      period: p,
-      category: template.category ?? "fijo",
-      description: template.description,
-      amount: template.amount,
-      currency: template.currency,
-      cardId: template.cardId ?? undefined,
-      source: "fixed" as const,
-      fixedId: template._id,
-    }));
+  if (createMissing) {
+    const rows = periods
+      .filter((p) => !done.has(p))
+      .map((p) => ({
+        userId: OWNER_ID,
+        period: p,
+        ...values,
+        source: "fixed" as const,
+        fixedId: template._id,
+      }));
 
-  if (rows.length) {
-    await Expense.insertMany(rows, { ordered: false }).catch((e) => {
-      if ((e as { code?: number }).code !== 11000) throw e;
-    });
+    if (rows.length) {
+      await Expense.insertMany(rows, { ordered: false }).catch((e) => {
+        if ((e as { code?: number }).code !== 11000) throw e;
+      });
+    }
+  }
+
+  if (updateExisting) {
+    await Expense.updateMany(
+      {
+        userId: OWNER_ID,
+        fixedId: template._id,
+        period: { $in: periods },
+        paid: { $ne: true },
+        overridden: { $ne: true },
+      },
+      { $set: values },
+    );
   }
 }
 
@@ -203,7 +235,62 @@ export async function updateExpense(
 ): Promise<ActionResult> {
   return run(async () => {
     const data = expenseInput.partial().parse(patch);
-    await Expense.updateOne({ _id: id, userId: OWNER_ID }, { $set: data });
+    const row = await Expense.findOne({ _id: id, userId: OWNER_ID })
+      .select("source")
+      .lean();
+    // Un gasto fijo editado a mano queda "fijado": no se pisa al propagar
+    // cambios desde la plantilla.
+    const extra =
+      (row as { source?: string } | null)?.source === "fixed"
+        ? { overridden: true }
+        : {};
+    await Expense.updateOne(
+      { _id: id, userId: OWNER_ID },
+      { $set: { ...data, ...extra } },
+    );
+  });
+}
+
+/** Quita un gasto fijo de un mes puntual (no se vuelve a generar en ese mes). */
+export async function skipFixedForPeriod(
+  expenseId: string,
+): Promise<ActionResult> {
+  return run(async () => {
+    const row = await Expense.findOne({ _id: expenseId, userId: OWNER_ID })
+      .select("source fixedId period")
+      .lean();
+    const doc = row as
+      | { source?: string; fixedId?: unknown; period?: string }
+      | null;
+    if (!doc?.fixedId || doc.source !== "fixed") {
+      throw new Error("Ese gasto no viene de una plantilla de gasto fijo.");
+    }
+    await FixedExpense.updateOne(
+      { _id: doc.fixedId, userId: OWNER_ID },
+      { $addToSet: { skipPeriods: doc.period } },
+    );
+    await Expense.deleteOne({ _id: expenseId, userId: OWNER_ID });
+  });
+}
+
+/** Vuelve a incluir un gasto fijo en un mes que había sido quitado. */
+export async function restoreFixedForPeriod(
+  fixedId: string,
+  targetPeriod: string,
+): Promise<ActionResult> {
+  return run(async () => {
+    const p = period.parse(targetPeriod);
+    await FixedExpense.updateOne(
+      { _id: fixedId, userId: OWNER_ID },
+      { $pull: { skipPeriods: p } },
+    );
+    const t = await FixedExpense.findOne({
+      _id: fixedId,
+      userId: OWNER_ID,
+    }).lean();
+    if (t) {
+      await materializeFixedRange(t as unknown as FixedTemplateLike, p, p);
+    }
   });
 }
 
@@ -295,10 +382,16 @@ export async function updateFixedExpense(
 ): Promise<ActionResult> {
   return run(async () => {
     const { applyFrom, ...data } = createFixedInput.parse(input);
-    await FixedExpense.updateOne(
-      { _id: id, userId: OWNER_ID },
-      { $set: { ...data, endPeriod: data.endPeriod ?? null } },
-    );
+
+    const update: Record<string, unknown> = {
+      $set: { ...data, endPeriod: data.endPeriod ?? null },
+    };
+    if (applyFrom) {
+      // Re-afirmar la vigencia desde `applyFrom`: destildar los meses salteados
+      // de ahí en adelante para que se vuelvan a generar.
+      update.$pull = { skipPeriods: { $gte: applyFrom } };
+    }
+    await FixedExpense.updateOne({ _id: id, userId: OWNER_ID }, update);
 
     if (applyFrom) {
       const doc = await FixedExpense.findOne({
@@ -310,6 +403,10 @@ export async function updateFixedExpense(
           doc as unknown as FixedTemplateLike,
           applyFrom,
           addMonths(applyFrom, AUTO_FIXED_HORIZON),
+          {
+            updateExisting: true,
+            createMissing: Boolean((doc as { autoGenerate?: boolean }).autoGenerate),
+          },
         );
       }
     }
@@ -319,6 +416,13 @@ export async function updateFixedExpense(
 export async function deleteFixedExpense(id: string): Promise<ActionResult> {
   return run(async () => {
     await FixedExpense.deleteOne({ _id: id, userId: OWNER_ID });
+    // Limpia las ocurrencias futuras no pagadas; deja el historial intacto.
+    await Expense.deleteMany({
+      userId: OWNER_ID,
+      fixedId: id,
+      paid: { $ne: true },
+      period: { $gte: currentPeriodValue() },
+    });
   });
 }
 
@@ -349,7 +453,9 @@ export async function generateFixedForPeriod(
     const rows = templates
       .filter((t) => {
         const end = (t.endPeriod as string) ?? null;
-        return (!end || p <= end) && !done.has(String(t._id));
+        const skipped =
+          Array.isArray(t.skipPeriods) && t.skipPeriods.includes(p);
+        return (!end || p <= end) && !skipped && !done.has(String(t._id));
       })
       .map((t) => ({
         userId: OWNER_ID,

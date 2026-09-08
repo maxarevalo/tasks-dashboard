@@ -1,39 +1,53 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Check, Pencil, Trash2, CreditCard, Repeat } from "lucide-react";
+import {
+  Plus,
+  Check,
+  Pencil,
+  Trash2,
+  CreditCard,
+  Repeat,
+  CalendarX,
+  CircleSlash,
+} from "lucide-react";
 import { Button } from "@/components/ui";
 import { RowMenu, type RowMenuItem } from "@/components/row-menu";
 import { formatMoney } from "@/lib/money";
 import { useAction } from "@/features/gastos/use-action";
-import { setExpensePaid, deleteExpense } from "@/features/gastos/actions";
+import {
+  setExpensePaid,
+  deleteExpense,
+  skipFixedForPeriod,
+} from "@/features/gastos/actions";
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
   type CardDTO,
   type ExpenseDTO,
+  type FixedExpenseDTO,
 } from "@/features/gastos/types";
 import type { Period } from "@/lib/period";
 import { ExpenseForm } from "./expense-form";
+import { FixedForm } from "./fixed-form";
 
 export function ExpensesPanel({
   period,
   expenses,
   cards,
+  fixedTemplates,
 }: {
   period: Period;
   expenses: ExpenseDTO[];
   cards: CardDTO[];
+  fixedTemplates: FixedExpenseDTO[];
 }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
+  const [fixedEditing, setFixedEditing] = useState<FixedExpenseDTO | null>(null);
 
   const openNew = () => {
     setEditing(null);
-    setFormOpen(true);
-  };
-  const openEdit = (e: ExpenseDTO) => {
-    setEditing(e);
     setFormOpen(true);
   };
 
@@ -67,7 +81,18 @@ export function ExpensesPanel({
             </header>
             <ul className="divide-y divide-slate-100">
               {items.map((e) => (
-                <ExpenseRow key={e.id} expense={e} onEdit={() => openEdit(e)} />
+                <ExpenseRow
+                  key={e.id}
+                  expense={e}
+                  onEdit={() => {
+                    setEditing(e);
+                    setFormOpen(true);
+                  }}
+                  onEditFixed={() => {
+                    const t = fixedTemplates.find((f) => f.id === e.fixedId);
+                    if (t) setFixedEditing(t);
+                  }}
+                />
               ))}
             </ul>
           </section>
@@ -81,6 +106,14 @@ export function ExpensesPanel({
         cards={cards}
         editing={editing}
       />
+
+      <FixedForm
+        open={fixedEditing != null}
+        onClose={() => setFixedEditing(null)}
+        editing={fixedEditing}
+        cards={cards}
+        effectiveFrom={period}
+      />
     </div>
   );
 }
@@ -88,44 +121,66 @@ export function ExpensesPanel({
 function ExpenseRow({
   expense: e,
   onEdit,
+  onEditFixed,
 }: {
   expense: ExpenseDTO;
   onEdit: () => void;
+  onEditFixed: () => void;
 }) {
   const { pending, exec } = useAction();
+  const isFixed = e.source === "fixed";
 
   const del = (scope: "one" | "group-future" | "group-all") =>
     exec(() => deleteExpense(e.id, scope));
 
-  const menuItems: RowMenuItem[] = [
-    {
-      label: "Editar",
-      icon: <Pencil className="h-3.5 w-3.5" />,
-      onClick: onEdit,
-    },
-    {
-      label: e.groupId ? "Borrar esta cuota" : "Borrar",
-      icon: <Trash2 className="h-3.5 w-3.5" />,
-      danger: true,
-      onClick: () => del("one"),
-    },
-    ...(e.groupId
-      ? [
-          {
-            label: "Borrar esta y futuras",
-            icon: <Trash2 className="h-3.5 w-3.5" />,
-            danger: true,
-            onClick: () => del("group-future"),
-          },
-          {
-            label: "Borrar todas las cuotas",
-            icon: <Trash2 className="h-3.5 w-3.5" />,
-            danger: true,
-            onClick: () => del("group-all"),
-          },
-        ]
-      : []),
-  ];
+  const menuItems: RowMenuItem[] = isFixed
+    ? [
+        {
+          label: "Editar el gasto fijo…",
+          icon: <Pencil className="h-3.5 w-3.5" />,
+          onClick: onEditFixed,
+        },
+        {
+          label: "Editar solo este mes",
+          icon: <Pencil className="h-3.5 w-3.5" />,
+          onClick: onEdit,
+        },
+        {
+          label: "Quitar de este mes",
+          icon: <CircleSlash className="h-3.5 w-3.5" />,
+          danger: true,
+          onClick: () => exec(() => skipFixedForPeriod(e.id)),
+        },
+      ]
+    : [
+        {
+          label: "Editar",
+          icon: <Pencil className="h-3.5 w-3.5" />,
+          onClick: onEdit,
+        },
+        {
+          label: e.groupId ? "Borrar esta cuota" : "Borrar",
+          icon: <Trash2 className="h-3.5 w-3.5" />,
+          danger: true,
+          onClick: () => del("one"),
+        },
+        ...(e.groupId
+          ? [
+              {
+                label: "Borrar esta y futuras",
+                icon: <Trash2 className="h-3.5 w-3.5" />,
+                danger: true,
+                onClick: () => del("group-future"),
+              },
+              {
+                label: "Borrar todas las cuotas",
+                icon: <Trash2 className="h-3.5 w-3.5" />,
+                danger: true,
+                onClick: () => del("group-all"),
+              },
+            ]
+          : []),
+      ];
 
   return (
     <li className="flex items-center gap-3 px-4 py-3">
@@ -151,7 +206,7 @@ function ExpenseRow({
         >
           {e.description}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
           {e.cardName && (
             <span className="inline-flex items-center gap-1">
               <CreditCard className="h-3 w-3" />
@@ -164,7 +219,23 @@ function ExpenseRow({
               cuota {e.installment.current}/{e.installment.total}
             </span>
           )}
-          {e.source === "fixed" && <span>fijo</span>}
+          {isFixed && e.overridden && (
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+              editado a mano
+            </span>
+          )}
+          {e.fixedStatus === "ends" && (
+            <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+              <CalendarX className="h-3 w-3" />
+              No sigue el mes que viene
+            </span>
+          )}
+          {e.fixedStatus === "orphan" && (
+            <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+              <CalendarX className="h-3 w-3" />
+              Plantilla eliminada
+            </span>
+          )}
         </div>
       </div>
 

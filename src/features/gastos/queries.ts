@@ -7,7 +7,7 @@ import {
   OWNER_ID,
   EXPENSE_CATEGORIES,
 } from "@/models/gastos";
-import { periodInRange, type Period } from "@/lib/period";
+import { addMonths, periodInRange, type Period } from "@/lib/period";
 import type {
   CardDTO,
   ExpenseDTO,
@@ -33,7 +33,11 @@ function mapCard(doc: Lean): CardDTO {
   };
 }
 
-function mapExpense(doc: Lean, cardName: string | null): ExpenseDTO {
+function mapExpense(
+  doc: Lean,
+  cardName: string | null,
+  fixedStatus: ExpenseDTO["fixedStatus"] = null,
+): ExpenseDTO {
   const inst = doc.installment as
     | { current?: number; total?: number }
     | undefined;
@@ -55,6 +59,8 @@ function mapExpense(doc: Lean, cardName: string | null): ExpenseDTO {
         ? { current: inst.current ?? 1, total: inst.total }
         : null,
     fixedId: doc.fixedId ? str(doc.fixedId) : null,
+    overridden: Boolean(doc.overridden),
+    fixedStatus,
   };
 }
 
@@ -71,6 +77,9 @@ function mapFixed(doc: Lean, cardName: string | null): FixedExpenseDTO {
     endPeriod: (doc.endPeriod as string) ?? null,
     active: Boolean(doc.active),
     autoGenerate: Boolean(doc.autoGenerate),
+    skipPeriods: Array.isArray(doc.skipPeriods)
+      ? (doc.skipPeriods as string[])
+      : [],
   };
 }
 
@@ -114,17 +123,36 @@ export async function getFixedExpenses(): Promise<FixedExpenseDTO[]> {
 export async function getMonthData(period: Period): Promise<MonthData> {
   await connectToDatabase();
 
+  const nextPeriod = addMonths(period, 1);
+
   const [expenseDocs, cards, fixedDocs] = await Promise.all([
     Expense.find({ userId: OWNER_ID, period }).sort({ createdAt: 1 }).lean(),
     getCards(true),
-    FixedExpense.find({ userId: OWNER_ID, active: true }).lean(),
+    FixedExpense.find({ userId: OWNER_ID }).lean(),
   ]);
 
   const cardName = new Map(cards.map((c) => [c.id, c.name]));
+  const fixedById = new Map(fixedDocs.map((f) => [String(f._id), f]));
+
+  function fixedStatusFor(fixedId: string | null): ExpenseDTO["fixedStatus"] {
+    if (!fixedId) return null;
+    const t = fixedById.get(fixedId);
+    if (!t) return "orphan";
+    if (!t.active) return "ends";
+    const end = (t.endPeriod as string) ?? null;
+    if (end && nextPeriod > end) return "ends";
+    const skips = Array.isArray(t.skipPeriods)
+      ? (t.skipPeriods as string[])
+      : [];
+    if (skips.includes(nextPeriod)) return "ends";
+    return "continues";
+  }
+
   const expenses = expenseDocs.map((d) =>
     mapExpense(
       d as Lean,
       d.cardId ? (cardName.get(String(d.cardId)) ?? null) : null,
+      d.source === "fixed" ? fixedStatusFor(d.fixedId ? String(d.fixedId) : null) : null,
     ),
   );
 
@@ -133,19 +161,38 @@ export async function getMonthData(period: Period): Promise<MonthData> {
   );
   const pending = fixedDocs.filter(
     (f) =>
+      f.active &&
       periodInRange(
         period,
         String(f.startPeriod),
         (f.endPeriod as string) ?? null,
-      ) && !materializedFixedIds.has(String(f._id)),
+      ) &&
+      !(Array.isArray(f.skipPeriods) && f.skipPeriods.includes(period)) &&
+      !materializedFixedIds.has(String(f._id)),
+  );
+
+  const notContinuingNextMonth = expenses
+    .filter((e) => e.fixedStatus === "ends" || e.fixedStatus === "orphan")
+    .map((e) => ({
+      description: e.description,
+      reason: e.fixedStatus as "ends" | "orphan",
+    }));
+
+  const fixedTemplates = fixedDocs.map((d) =>
+    mapFixed(
+      d as Lean,
+      d.cardId ? (cardName.get(String(d.cardId)) ?? null) : null,
+    ),
   );
 
   return {
     period,
     expenses,
     cards: cards.filter((c) => !c.archived),
+    fixedTemplates,
     summary: buildSummary(expenses),
     pendingManualFixedCount: pending.filter((f) => !f.autoGenerate).length,
     pendingAutoFixedCount: pending.filter((f) => f.autoGenerate).length,
+    notContinuingNextMonth,
   };
 }

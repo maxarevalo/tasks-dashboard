@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { CreditCard, Repeat, Receipt } from "lucide-react";
+import { CreditCard, Repeat, Receipt, CalendarX } from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
-import { normalizePeriod } from "@/lib/period";
+import { normalizePeriod, addMonths, periodLabel } from "@/lib/period";
 import { getMonthData } from "@/features/gastos/queries";
 import { MonthNav } from "./_components/month-nav";
 import { Summary } from "./_components/summary";
@@ -54,12 +54,37 @@ export default async function GastosPage({
         count={data.pendingManualFixedCount}
       />
 
+      {data.notContinuingNextMonth.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="flex items-center gap-2 font-medium">
+            <CalendarX className="h-4 w-4" />
+            {data.notContinuingNextMonth.length === 1
+              ? "1 gasto fijo no continúa"
+              : `${data.notContinuingNextMonth.length} gastos fijos no continúan`}{" "}
+            en {periodLabel(addMonths(period, 1))}
+          </p>
+          <ul className="mt-1 list-inside list-disc text-xs text-amber-800">
+            {data.notContinuingNextMonth.map((f, i) => (
+              <li key={i}>
+                {f.description}
+                {f.reason === "orphan" ? " (plantilla eliminada)" : ""}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-amber-700">
+            Si lo necesitás más adelante, editá el gasto fijo (fecha “hasta”) o
+            creá uno nuevo.
+          </p>
+        </div>
+      )}
+
       <Summary summary={data.summary} />
 
       <ExpensesPanel
         period={period}
         expenses={data.expenses}
         cards={data.cards}
+        fixedTemplates={data.fixedTemplates}
       />
     </div>
   );

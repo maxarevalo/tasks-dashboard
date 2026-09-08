@@ -28,6 +28,15 @@ export type ExpenseDTO = {
   groupId: string | null;
   installment: { current: number; total: number } | null;
   fixedId: string | null;
+  /** Solo para source="fixed": fue editada a mano. */
+  overridden: boolean;
+  /**
+   * Solo para source="fixed": qué pasa el mes siguiente.
+   * - "continues": el mes que viene sigue existiendo.
+   * - "ends": el mes que viene NO va a estar (fin de vigencia / salteado / pausado).
+   * - "orphan": la plantilla ya no existe.
+   */
+  fixedStatus: "continues" | "ends" | "orphan" | null;
 };
 
 export type FixedExpenseDTO = {
@@ -42,6 +51,7 @@ export type FixedExpenseDTO = {
   endPeriod: Period | null;
   active: boolean;
   autoGenerate: boolean;
+  skipPeriods: Period[];
 };
 
 export type CategoryTotals = Record<
@@ -60,11 +70,15 @@ export type MonthData = {
   period: Period;
   expenses: ExpenseDTO[];
   cards: CardDTO[];
+  /** Plantillas de gastos fijos (para editar desde un mes puntual). */
+  fixedTemplates: FixedExpenseDTO[];
   summary: MonthSummary;
   /** Gastos fijos manuales sin cargar en este mes (se muestra el banner). */
   pendingManualFixedCount: number;
   /** Gastos fijos automáticos sin cargar (se materializan solos). */
   pendingAutoFixedCount: number;
+  /** Gastos fijos de este mes que NO continúan el mes siguiente. */
+  notContinuingNextMonth: { description: string; reason: "ends" | "orphan" }[];
 };
 
 export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
