@@ -185,13 +185,27 @@ export async function getMonthData(period: Period): Promise<MonthData> {
     ),
   );
 
+  const pendingManualFixed = pending
+    .filter((f) => !f.autoGenerate)
+    .map((f) => ({
+      id: String(f._id),
+      description: String(f.description),
+      amount: (f.amount as number) ?? 0,
+      currency: f.currency as MonthData["pendingManualFixed"][number]["currency"],
+      category:
+        (f.category as "fijo" | "prestamo") ?? "fijo",
+      cardName: f.cardId
+        ? (cardName.get(String(f.cardId)) ?? null)
+        : null,
+    }));
+
   return {
     period,
     expenses,
     cards: cards.filter((c) => !c.archived),
     fixedTemplates,
     summary: buildSummary(expenses),
-    pendingManualFixedCount: pending.filter((f) => !f.autoGenerate).length,
+    pendingManualFixed,
     pendingAutoFixedCount: pending.filter((f) => f.autoGenerate).length,
     notContinuingNextMonth,
   };

@@ -66,6 +66,15 @@ export type MonthSummary = {
   pending: { ARS: number; USD: number };
 };
 
+export type PendingFixedItem = {
+  id: string;
+  description: string;
+  amount: number;
+  currency: Currency;
+  category: "fijo" | "prestamo";
+  cardName: string | null;
+};
+
 export type MonthData = {
   period: Period;
   expenses: ExpenseDTO[];
@@ -73,8 +82,8 @@ export type MonthData = {
   /** Plantillas de gastos fijos (para editar desde un mes puntual). */
   fixedTemplates: FixedExpenseDTO[];
   summary: MonthSummary;
-  /** Gastos fijos manuales sin cargar en este mes (se muestra el banner). */
-  pendingManualFixedCount: number;
+  /** Gastos fijos manuales sin cargar en este mes: detalle de lo que se agregaría. */
+  pendingManualFixed: PendingFixedItem[];
   /** Gastos fijos automáticos sin cargar (se materializan solos). */
   pendingAutoFixedCount: number;
   /** Gastos fijos de este mes que NO continúan el mes siguiente. */

@@ -49,10 +49,7 @@ export default async function GastosPage({
       </div>
 
       <AutoFixedSync period={period} count={data.pendingAutoFixedCount} />
-      <GenerateFixedButton
-        period={period}
-        count={data.pendingManualFixedCount}
-      />
+      <GenerateFixedButton period={period} items={data.pendingManualFixed} />
 
       {data.notContinuingNextMonth.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
