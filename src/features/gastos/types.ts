@@ -105,3 +105,5 @@ export const CATEGORY_ORDER: ExpenseCategory[] = [
 ];
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
+
+export type DupStatus = { exact: boolean; sameName: boolean };

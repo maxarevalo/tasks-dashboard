@@ -47,6 +47,11 @@ Toda ruta que no sea `/login` está protegida por `src/proxy.ts` (middleware de 
   a todos de una. Admite montos negativos (reintegros).
   Parser en `src/features/gastos/parse-bulk.ts`.
 
+  En la revisión se marcan los duplicados contra la base (mismo mes):
+  **rojo** = ya existe uno idéntico (misma descripción y monto) → queda
+  destildado; **naranja** = misma descripción con otro monto → se importa pero
+  avisa. Cada fila marcada tiene un check "Importar igualmente".
+
   Formato JSON — `desc` y `amount` obligatorios, el resto opcional:
   ```json
   [

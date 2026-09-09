@@ -7,7 +7,7 @@ import { auth } from "@/auth";
 import { connectToDatabase } from "@/lib/db";
 import { Card, Expense, FixedExpense, OWNER_ID } from "@/models/gastos";
 import { addMonths, currentPeriod as currentPeriodValue, isValidPeriod } from "@/lib/period";
-import type { ActionResult } from "./types";
+import type { ActionResult, DupStatus } from "./types";
 
 const GASTOS_PATH = "/personal/gastos";
 
@@ -245,6 +245,51 @@ export async function createExpensesBulk(
     });
     await Expense.insertMany(rows);
   });
+}
+
+/**
+ * Para el paso de revisión de la importación: por cada item devuelve si ya
+ * existe un gasto con la misma descripción (sameName) y/o mismo monto (exact)
+ * en el mismo mes.
+ */
+export async function checkBulkDuplicates(
+  probes: { description: string; period: string; amount: number }[],
+): Promise<DupStatus[]> {
+  try {
+    await requireSession();
+    await connectToDatabase();
+    if (!Array.isArray(probes) || probes.length === 0) return [];
+
+    const norm = (s: string) => s.trim().toLowerCase();
+    const periods = [
+      ...new Set(probes.map((p) => p.period).filter(isValidPeriod)),
+    ];
+    const existing = await Expense.find({
+      userId: OWNER_ID,
+      period: { $in: periods },
+    })
+      .select("description amount period")
+      .lean();
+
+    const byKey = new Map<string, number[]>();
+    for (const e of existing) {
+      const k = `${e.period}|${norm(String(e.description))}`;
+      const arr = byKey.get(k) ?? [];
+      arr.push(Number(e.amount));
+      byKey.set(k, arr);
+    }
+
+    return probes.map((p) => {
+      const amounts = byKey.get(`${p.period}|${norm(p.description ?? "")}`);
+      if (!amounts) return { exact: false, sameName: false };
+      return {
+        sameName: true,
+        exact: amounts.some((a) => Math.abs(a - p.amount) < 0.005),
+      };
+    });
+  } catch {
+    return probes.map(() => ({ exact: false, sameName: false }));
+  }
 }
 
 export async function createInstallmentPurchase(

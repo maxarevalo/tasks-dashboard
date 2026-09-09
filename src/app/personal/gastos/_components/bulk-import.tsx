@@ -1,19 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Trash2, ArrowLeft, Upload } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Trash2, ArrowLeft, Upload, AlertTriangle } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { Field, Input, Select, Textarea, Button, ErrorText } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
-import type { Period } from "@/lib/period";
+import { periodShortLabel, type Period } from "@/lib/period";
 import { useAction } from "@/features/gastos/use-action";
-import { createExpensesBulk } from "@/features/gastos/actions";
+import {
+  createExpensesBulk,
+  checkBulkDuplicates,
+} from "@/features/gastos/actions";
 import {
   parseBulkText,
   parseBulkJson,
   type ParsedItem,
 } from "@/features/gastos/parse-bulk";
-import type { CardDTO, ExpenseCategory } from "@/features/gastos/types";
+import type {
+  CardDTO,
+  ExpenseCategory,
+  DupStatus,
+} from "@/features/gastos/types";
 
 type Row = {
   key: number;
@@ -24,7 +31,11 @@ type Row = {
   cardId: string;
   amount: string;
   paid: boolean;
+  /** null = automático (excluye si es duplicado exacto). */
+  includeOverride: boolean | null;
 };
+
+type RowStatus = "exact" | "name" | null;
 
 const CATEGORY_OPTIONS: { value: ExpenseCategory; label: string }[] = [
   { value: "tarjeta", label: "Tarjeta" },
@@ -44,6 +55,8 @@ const PLACEHOLDER = `Pegá un array JSON (recomendado) o el texto del resumen.
 
 ${JSON_EXAMPLE}`;
 
+const nd = (s: string) => s.trim().toLowerCase();
+
 export function BulkImport({
   open,
   onClose,
@@ -60,6 +73,10 @@ export function BulkImport({
   const [text, setText] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [dupInfo, setDupInfo] = useState<Record<number, DupStatus>>({});
+
+  const [bulkCategory, setBulkCategory] = useState<ExpenseCategory>("tarjeta");
+  const [bulkCard, setBulkCard] = useState("");
 
   // Reset al abrir
   const [syncedOpen, setSyncedOpen] = useState(false);
@@ -70,12 +87,10 @@ export function BulkImport({
     setRows([]);
     setParseError(null);
     setError(null);
+    setDupInfo({});
   } else if (!open && syncedOpen) {
     setSyncedOpen(false);
   }
-
-  const [bulkCategory, setBulkCategory] = useState<ExpenseCategory>("tarjeta");
-  const [bulkCard, setBulkCard] = useState("");
 
   function doParse() {
     const trimmed = text.trim();
@@ -94,9 +109,7 @@ export function BulkImport({
     } else {
       parsed = parseBulkText(text, period);
       if (parsed.length === 0) {
-        setParseError(
-          "No se reconoció ningún gasto. Probá con el formato JSON.",
-        );
+        setParseError("No se reconoció ningún gasto. Probá con el formato JSON.");
         return;
       }
     }
@@ -106,6 +119,7 @@ export function BulkImport({
     );
 
     setParseError(null);
+    setDupInfo({});
     setRows(
       parsed.map((p, i) => {
         const category = p.category ?? bulkCategory;
@@ -121,6 +135,7 @@ export function BulkImport({
           cardId: category === "tarjeta" ? hintedCard : "",
           amount: String(p.amount),
           paid: p.paid ?? false,
+          includeOverride: null,
         };
       }),
     );
@@ -141,27 +156,106 @@ export function BulkImport({
     );
   }
 
+  // Chequeo de duplicados contra la base (con debounce).
+  const probeSig = rows
+    .map((r) => `${r.key}:${nd(r.description)}:${r.period}:${r.amount}`)
+    .join("|");
+
+  useEffect(() => {
+    if (step !== "review" || rows.length === 0) return;
+    const snapshot = rows.map((r) => ({
+      key: r.key,
+      description: r.description.trim(),
+      period: r.period,
+      amount: Number(r.amount),
+    }));
+    const handle = setTimeout(async () => {
+      const res = await checkBulkDuplicates(
+        snapshot.map(({ description, period: p, amount }) => ({
+          description,
+          period: p,
+          amount,
+        })),
+      );
+      const map: Record<number, DupStatus> = {};
+      snapshot.forEach((s, i) => {
+        map[s.key] = res[i] ?? { exact: false, sameName: false };
+      });
+      setDupInfo(map);
+    }, 450);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, probeSig]);
+
+  // Estado de duplicado por fila (combina base + duplicados dentro del pegado).
+  const statuses = useMemo<RowStatus[]>(() => {
+    return rows.map((r, idx) => {
+      const info = dupInfo[r.key];
+      let exact = info?.exact ?? false;
+      let name = info?.sameName ?? false;
+      const key = nd(r.description);
+      const amt = Number(r.amount);
+      for (let j = 0; j < idx; j++) {
+        const o = rows[j];
+        if (nd(o.description) === key && o.period === r.period) {
+          name = true;
+          if (Number.isFinite(amt) && Math.abs(Number(o.amount) - amt) < 0.005) {
+            exact = true;
+          }
+        }
+      }
+      return exact ? "exact" : name ? "name" : null;
+    });
+  }, [rows, dupInfo]);
+
+  const isIncluded = (r: Row, i: number) =>
+    r.includeOverride ?? statuses[i] !== "exact";
+
+  const included = rows.filter(isIncluded);
+
   const totals = useMemo(() => {
     const t = { ARS: 0, USD: 0 };
-    for (const r of rows) {
+    rows.forEach((r, i) => {
+      if (!isIncluded(r, i)) return;
       const n = Number(r.amount);
       if (Number.isFinite(n)) t[r.currency] += n;
-    }
+    });
     return t;
-  }, [rows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, statuses]);
+
+  const flagged = useMemo(() => {
+    let exact = 0;
+    let name = 0;
+    for (const s of statuses) {
+      if (s === "exact") exact++;
+      else if (s === "name") name++;
+    }
+    return { exact, name };
+  }, [statuses]);
 
   function doImport() {
-    const invalid = rows.find(
-      (r) => !r.description.trim() || !Number.isFinite(Number(r.amount)) || Number(r.amount) === 0,
+    const toImport = rows.filter(isIncluded);
+    if (toImport.length === 0) {
+      setError("No hay ítems seleccionados para importar.");
+      return;
+    }
+    const invalid = toImport.find(
+      (r) =>
+        !r.description.trim() ||
+        !Number.isFinite(Number(r.amount)) ||
+        Number(r.amount) === 0,
     );
     if (invalid) {
-      setError(`Revisá "${invalid.description || "(sin descripción)"}": monto o descripción inválidos.`);
+      setError(
+        `Revisá "${invalid.description || "(sin descripción)"}": monto o descripción inválidos.`,
+      );
       return;
     }
     exec(
       () =>
         createExpensesBulk(
-          rows.map((r) => ({
+          toImport.map((r) => ({
             period: r.period,
             category: r.category,
             description: r.description.trim(),
@@ -220,8 +314,8 @@ export function BulkImport({
                   <code>&quot;USD&quot;</code> (default ARS)
                 </li>
                 <li>
-                  <code>category</code>: <code>tarjeta</code> | <code>prestamo</code>{" "}
-                  | <code>fijo</code> | <code>previsto</code>
+                  <code>category</code>: <code>tarjeta</code> |{" "}
+                  <code>prestamo</code> | <code>fijo</code> | <code>previsto</code>
                 </li>
                 <li>
                   <code>card</code>: nombre de la tarjeta tal cual está cargada
@@ -303,13 +397,48 @@ export function BulkImport({
             </div>
           </div>
 
+          {(flagged.exact > 0 || flagged.name > 0) && (
+            <p className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+              <span>
+                {flagged.exact > 0 && (
+                  <>
+                    <span className="font-medium text-red-600">
+                      {flagged.exact} ya existe{flagged.exact > 1 ? "n" : ""}
+                    </span>{" "}
+                    (rojo, quedan destildados){" "}
+                  </>
+                )}
+                {flagged.name > 0 && (
+                  <>
+                    {flagged.exact > 0 ? "· " : ""}
+                    <span className="font-medium text-amber-600">
+                      {flagged.name} con la misma descripción
+                    </span>{" "}
+                    (naranja)
+                  </>
+                )}
+              </span>
+            </p>
+          )}
+
           <ul className="space-y-3">
-            {rows.map((r) => {
+            {rows.map((r, idx) => {
               const negative = Number(r.amount) < 0;
+              const st = statuses[idx];
+              const inc = isIncluded(r, idx);
+              const ring =
+                st === "exact"
+                  ? "border-red-300 bg-red-50"
+                  : st === "name"
+                    ? "border-amber-300 bg-amber-50"
+                    : "border-slate-200 bg-white";
               return (
                 <li
                   key={r.key}
-                  className="rounded-xl border border-slate-200 bg-white p-3"
+                  className={`rounded-xl border p-3 ${ring} ${
+                    inc ? "" : "opacity-60"
+                  }`}
                 >
                   <div className="flex items-start gap-2">
                     <input
@@ -317,7 +446,7 @@ export function BulkImport({
                       onChange={(e) =>
                         patch(r.key, { description: e.target.value })
                       }
-                      className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-slate-900"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-slate-900"
                     />
                     <button
                       type="button"
@@ -330,6 +459,18 @@ export function BulkImport({
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+
+                  {st && (
+                    <p
+                      className={`mt-1 text-xs ${
+                        st === "exact" ? "text-red-600" : "text-amber-600"
+                      }`}
+                    >
+                      {st === "exact"
+                        ? `Ya existe un gasto idéntico en ${periodShortLabel(r.period)}.`
+                        : `Ya hay un gasto con esta descripción en ${periodShortLabel(r.period)}.`}
+                    </p>
+                  )}
 
                   <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <label className="text-[11px] text-slate-500">
@@ -384,7 +525,9 @@ export function BulkImport({
                         type="number"
                         step="0.01"
                         value={r.amount}
-                        onChange={(e) => patch(r.key, { amount: e.target.value })}
+                        onChange={(e) =>
+                          patch(r.key, { amount: e.target.value })
+                        }
                         className={`mt-0.5 ${negative ? "text-emerald-700" : ""}`}
                       />
                     </label>
@@ -414,11 +557,30 @@ export function BulkImport({
                       <input
                         type="checkbox"
                         checked={r.paid}
-                        onChange={(e) => patch(r.key, { paid: e.target.checked })}
+                        onChange={(e) =>
+                          patch(r.key, { paid: e.target.checked })
+                        }
                         className="h-4 w-4 rounded border-slate-300"
                       />
                       Ya pagado
                     </label>
+                    {st && (
+                      <label
+                        className={`flex items-center gap-1.5 py-2 text-xs font-medium ${
+                          st === "exact" ? "text-red-600" : "text-amber-700"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={inc}
+                          onChange={(e) =>
+                            patch(r.key, { includeOverride: e.target.checked })
+                          }
+                          className="h-4 w-4 rounded border-slate-300"
+                        />
+                        Importar igualmente
+                      </label>
+                    )}
                   </div>
                 </li>
               );
@@ -432,7 +594,9 @@ export function BulkImport({
           )}
 
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-            <span className="text-slate-500">Total a importar: </span>
+            <span className="text-slate-500">
+              Total a importar ({included.length}):{" "}
+            </span>
             <span className="font-semibold text-slate-900">
               {formatMoney(totals.ARS, "ARS")}
             </span>
@@ -460,10 +624,10 @@ export function BulkImport({
             <Button
               type="button"
               onClick={doImport}
-              disabled={pending || rows.length === 0}
+              disabled={pending || included.length === 0}
             >
               <Upload className="h-4 w-4" />
-              {pending ? "Importando…" : `Importar ${rows.length}`}
+              {pending ? "Importando…" : `Importar ${included.length}`}
             </Button>
           </div>
         </div>
