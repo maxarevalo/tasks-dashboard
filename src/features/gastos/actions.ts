@@ -41,7 +41,12 @@ async function run(fn: () => Promise<void>): Promise<ActionResult> {
 
 const period = z.string().refine(isValidPeriod, "Período inválido (YYYY-MM).");
 const currency = z.enum(["ARS", "USD"]);
+// Cuotas y fijos: siempre positivo.
 const amount = z.coerce.number().positive("El monto debe ser mayor a 0.");
+// Gastos sueltos: admite negativo (reintegros), no cero.
+const signedAmount = z.coerce
+  .number()
+  .refine((n) => Number.isFinite(n) && n !== 0, "El monto no puede ser 0.");
 const objectId = z
   .string()
   .regex(/^[a-f\d]{24}$/i, "Id inválido")
@@ -52,11 +57,20 @@ const expenseInput = z.object({
   period,
   category: z.enum(["tarjeta", "prestamo", "fijo", "previsto"]),
   description: z.string().trim().min(1, "Falta la descripción."),
-  amount,
+  amount: signedAmount,
   currency,
   cardId: objectId,
   note: z.string().trim().optional(),
   paid: z.boolean().optional(),
+});
+
+const bulkExpenseInput = z.object({
+  period,
+  category: z.enum(["tarjeta", "prestamo", "fijo", "previsto"]),
+  description: z.string().trim().min(1),
+  amount: signedAmount,
+  currency,
+  cardId: objectId,
 });
 
 const installmentInput = z.object({
@@ -200,6 +214,33 @@ export async function createExpense(
       source: "manual",
       paidAt: data.paid ? new Date() : undefined,
     });
+  });
+}
+
+export async function createExpensesBulk(
+  items: z.input<typeof bulkExpenseInput>[],
+): Promise<ActionResult> {
+  return run(async () => {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error("No hay items para importar.");
+    }
+    if (items.length > 300) {
+      throw new Error("Máximo 300 items por importación.");
+    }
+    const rows = items.map((raw) => {
+      const data = bulkExpenseInput.parse(raw);
+      return {
+        userId: OWNER_ID,
+        period: data.period,
+        category: data.category,
+        description: data.description,
+        amount: data.amount,
+        currency: data.currency,
+        cardId: data.category === "tarjeta" ? data.cardId : undefined,
+        source: "manual" as const,
+      };
+    });
+    await Expense.insertMany(rows);
   });
 }
 

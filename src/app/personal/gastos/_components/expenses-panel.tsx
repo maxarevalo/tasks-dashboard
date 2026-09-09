@@ -10,6 +10,7 @@ import {
   Repeat,
   CalendarX,
   CircleSlash,
+  ClipboardPaste,
 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { RowMenu, type RowMenuItem } from "@/components/row-menu";
@@ -30,6 +31,7 @@ import {
 import type { Period } from "@/lib/period";
 import { ExpenseForm } from "./expense-form";
 import { FixedForm } from "./fixed-form";
+import { BulkImport } from "./bulk-import";
 
 export function ExpensesPanel({
   period,
@@ -45,6 +47,7 @@ export function ExpensesPanel({
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
   const [fixedEditing, setFixedEditing] = useState<FixedExpenseDTO | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const openNew = () => {
     setEditing(null);
@@ -58,12 +61,18 @@ export function ExpensesPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900">Detalle</h3>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4" />
-          Agregar gasto
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setBulkOpen(true)}>
+            <ClipboardPaste className="h-4 w-4" />
+            Importar
+          </Button>
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4" />
+            Agregar gasto
+          </Button>
+        </div>
       </div>
 
       {grouped.length === 0 ? (
@@ -113,6 +122,13 @@ export function ExpensesPanel({
         editing={fixedEditing}
         cards={cards}
         effectiveFrom={period}
+      />
+
+      <BulkImport
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        period={period}
+        cards={cards}
       />
     </div>
   );

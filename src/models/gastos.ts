@@ -66,7 +66,8 @@ const expenseSchema = new Schema(
     period: { type: String, required: true }, // YYYY-MM
     category: { type: String, enum: EXPENSE_CATEGORIES, required: true },
     description: { type: String, required: true, trim: true },
-    amount: { type: Number, required: true, min: 0 },
+    // Puede ser negativo: reintegros / ajustes.
+    amount: { type: Number, required: true },
     currency: { type: String, enum: CURRENCY_ENUM, required: true },
     cardId: { type: Schema.Types.ObjectId, ref: "Card" },
     paid: { type: Boolean, default: false },
