@@ -8,7 +8,11 @@ import { formatMoney } from "@/lib/money";
 import type { Period } from "@/lib/period";
 import { useAction } from "@/features/gastos/use-action";
 import { createExpensesBulk } from "@/features/gastos/actions";
-import { parseBulkText } from "@/features/gastos/parse-bulk";
+import {
+  parseBulkText,
+  parseBulkJson,
+  type ParsedItem,
+} from "@/features/gastos/parse-bulk";
 import type { CardDTO, ExpenseCategory } from "@/features/gastos/types";
 
 type Row = {
@@ -19,6 +23,7 @@ type Row = {
   currency: "ARS" | "USD";
   cardId: string;
   amount: string;
+  paid: boolean;
 };
 
 const CATEGORY_OPTIONS: { value: ExpenseCategory; label: string }[] = [
@@ -28,13 +33,16 @@ const CATEGORY_OPTIONS: { value: ExpenseCategory; label: string }[] = [
   { value: "previsto", label: "Previsto" },
 ];
 
-const PLACEHOLDER = `* 07 de septiembre
-   * Pagos360*applusiteuvearg
-$
-97.057,65
-   * Los primos
-$
-15.300,00`;
+const JSON_EXAMPLE = `[
+  { "desc": "Pagos360 applus", "amount": 97057.65, "category": "tarjeta", "card": "Visa Galicia" },
+  { "desc": "Los primos", "amount": 15300, "month": "2026-09" },
+  { "desc": "Google Cloud", "amount": 1.99, "currency": "USD" },
+  { "desc": "Reintegro Disney", "amount": -23999, "paid": true }
+]`;
+
+const PLACEHOLDER = `Pegá un array JSON (recomendado) o el texto del resumen.
+
+${JSON_EXAMPLE}`;
 
 export function BulkImport({
   open,
@@ -70,24 +78,51 @@ export function BulkImport({
   const [bulkCard, setBulkCard] = useState("");
 
   function doParse() {
-    const parsed = parseBulkText(text, period);
-    if (parsed.length === 0) {
-      setParseError(
-        "No se reconoció ningún gasto. Revisá el formato del texto pegado.",
-      );
-      return;
+    const trimmed = text.trim();
+    const looksJson = trimmed.startsWith("[") || trimmed.startsWith("{");
+
+    let parsed: ParsedItem[];
+    if (looksJson) {
+      const res = parseBulkJson(text, period);
+      if (!res) {
+        setParseError(
+          "El JSON no es válido o ningún objeto tiene descripción y monto.",
+        );
+        return;
+      }
+      parsed = res;
+    } else {
+      parsed = parseBulkText(text, period);
+      if (parsed.length === 0) {
+        setParseError(
+          "No se reconoció ningún gasto. Probá con el formato JSON.",
+        );
+        return;
+      }
     }
+
+    const cardByName = new Map(
+      cards.map((c) => [c.name.trim().toLowerCase(), c.id]),
+    );
+
     setParseError(null);
     setRows(
-      parsed.map((p, i) => ({
-        key: i,
-        description: p.description,
-        period: p.period,
-        category: bulkCategory,
-        currency: p.currency,
-        cardId: bulkCategory === "tarjeta" ? bulkCard : "",
-        amount: String(p.amount),
-      })),
+      parsed.map((p, i) => {
+        const category = p.category ?? bulkCategory;
+        const hintedCard = p.cardHint
+          ? (cardByName.get(p.cardHint.toLowerCase()) ?? "")
+          : bulkCard;
+        return {
+          key: i,
+          description: p.description,
+          period: p.period,
+          category,
+          currency: p.currency,
+          cardId: category === "tarjeta" ? hintedCard : "",
+          amount: String(p.amount),
+          paid: p.paid ?? false,
+        };
+      }),
     );
     setStep("review");
   }
@@ -133,6 +168,7 @@ export function BulkImport({
             amount: Number(r.amount),
             currency: r.currency,
             cardId: r.category === "tarjeta" ? r.cardId : "",
+            paid: r.paid,
           })),
         ),
       onClose,
@@ -148,15 +184,15 @@ export function BulkImport({
       size="lg"
       title={
         step === "paste"
-          ? "Importar gastos — pegar texto"
+          ? "Importar gastos"
           : `Importar gastos — revisar (${rows.length})`
       }
     >
       {step === "paste" ? (
         <div className="space-y-4">
           <Field
-            label="Pegá el texto"
-            hint="Un ítem por bloque: descripción, moneda ($ o U$S) y monto. Las líneas “* 07 de septiembre” fijan el mes."
+            label="Pegá un array JSON o el texto del resumen"
+            hint="JSON: campos desc y amount obligatorios; currency, category, card, month y paid son opcionales."
           >
             <Textarea
               rows={12}
@@ -167,6 +203,50 @@ export function BulkImport({
               autoFocus
             />
           </Field>
+
+          <details className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            <summary className="cursor-pointer font-medium text-slate-700">
+              Formato JSON recomendado
+            </summary>
+            <div className="mt-2 space-y-2">
+              <p>
+                Array de objetos. <code>desc</code> y <code>amount</code> son lo
+                único obligatorio. <code>amount</code> admite negativos
+                (reintegros).
+              </p>
+              <ul className="list-inside list-disc space-y-0.5">
+                <li>
+                  <code>currency</code>: <code>&quot;ARS&quot;</code> |{" "}
+                  <code>&quot;USD&quot;</code> (default ARS)
+                </li>
+                <li>
+                  <code>category</code>: <code>tarjeta</code> | <code>prestamo</code>{" "}
+                  | <code>fijo</code> | <code>previsto</code>
+                </li>
+                <li>
+                  <code>card</code>: nombre de la tarjeta tal cual está cargada
+                </li>
+                <li>
+                  <code>month</code>: <code>&quot;YYYY-MM&quot;</code> (o una
+                  fecha completa; default: el mes que estás viendo)
+                </li>
+                <li>
+                  <code>paid</code>: <code>true</code> / <code>false</code>
+                </li>
+              </ul>
+              <pre className="overflow-x-auto rounded bg-white p-2 text-[11px] leading-relaxed text-slate-700">
+                {JSON_EXAMPLE}
+              </pre>
+              <button
+                type="button"
+                onClick={() => setText(JSON_EXAMPLE)}
+                className="font-medium text-slate-700 underline underline-offset-2"
+              >
+                Usar este ejemplo
+              </button>
+            </div>
+          </details>
+
           <ErrorText>{parseError}</ErrorText>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
@@ -310,25 +390,36 @@ export function BulkImport({
                     </label>
                   </div>
 
-                  {r.category === "tarjeta" && (
-                    <label className="mt-2 block text-[11px] text-slate-500">
-                      Tarjeta
-                      <Select
-                        value={r.cardId}
-                        onChange={(e) =>
-                          patch(r.key, { cardId: e.target.value })
-                        }
-                        className="mt-0.5"
-                      >
-                        <option value="">Sin especificar</option>
-                        {activeCards.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </Select>
+                  <div className="mt-2 flex flex-wrap items-end gap-3">
+                    {r.category === "tarjeta" && (
+                      <label className="flex-1 text-[11px] text-slate-500">
+                        Tarjeta
+                        <Select
+                          value={r.cardId}
+                          onChange={(e) =>
+                            patch(r.key, { cardId: e.target.value })
+                          }
+                          className="mt-0.5"
+                        >
+                          <option value="">Sin especificar</option>
+                          {activeCards.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                    )}
+                    <label className="flex items-center gap-1.5 py-2 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={r.paid}
+                        onChange={(e) => patch(r.key, { paid: e.target.checked })}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      Ya pagado
                     </label>
-                  )}
+                  </div>
                 </li>
               );
             })}

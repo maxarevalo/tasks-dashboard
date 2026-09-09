@@ -41,11 +41,25 @@ Toda ruta que no sea `/login` está protegida por `src/proxy.ts` (middleware de 
     alcanzada, pausado o plantilla borrada), la fila muestra un badge y el mes
     un banner.
 - Marcar pagado / pendiente por gasto.
-- **Importar masivo** (botón "Importar"): se pega un texto tipo resumen de
-  tarjeta (`* 07 de septiembre` / descripción / `$` o `U$S` / monto formato AR)
-  y en un segundo paso se edita cada ítem (mes, categoría, moneda, tarjeta,
-  monto) o se aplica categoría/tarjeta a todos de una. Admite montos negativos
-  (reintegros). Parser en `src/features/gastos/parse-bulk.ts`.
+- **Importar masivo** (botón "Importar"): se pega **un array JSON** (recomendado)
+  o el texto crudo del resumen de tarjeta. Segundo paso: se edita cada ítem
+  (mes, categoría, moneda, tarjeta, monto, pagado) o se aplica categoría/tarjeta
+  a todos de una. Admite montos negativos (reintegros).
+  Parser en `src/features/gastos/parse-bulk.ts`.
+
+  Formato JSON — `desc` y `amount` obligatorios, el resto opcional:
+  ```json
+  [
+    { "desc": "Pagos360 applus", "amount": 97057.65, "category": "tarjeta", "card": "Visa Galicia" },
+    { "desc": "Los primos", "amount": 15300, "month": "2026-09" },
+    { "desc": "Google Cloud", "amount": 1.99, "currency": "USD" },
+    { "desc": "Reintegro Disney", "amount": -23999, "paid": true }
+  ]
+  ```
+  `currency`: `ARS`|`USD` (def. ARS) · `category`: `tarjeta`|`prestamo`|`fijo`|`previsto` ·
+  `card`: nombre exacto de la tarjeta · `month`: `YYYY-MM` (def. el mes visible) ·
+  `paid`: bool. Alias aceptados: `description`/`descripcion`, `monto`/`importe`,
+  `moneda`, `categoria`/`tipo`, `tarjeta`, `mes`/`fecha`/`date`, `pagado`.
 
 Código: modelos en `src/models/gastos.ts`, lecturas en
 `src/features/gastos/queries.ts`, mutaciones (Server Actions) en

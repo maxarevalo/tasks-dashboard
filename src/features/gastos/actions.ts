@@ -71,6 +71,7 @@ const bulkExpenseInput = z.object({
   amount: signedAmount,
   currency,
   cardId: objectId,
+  paid: z.boolean().optional(),
 });
 
 const installmentInput = z.object({
@@ -238,6 +239,8 @@ export async function createExpensesBulk(
         currency: data.currency,
         cardId: data.category === "tarjeta" ? data.cardId : undefined,
         source: "manual" as const,
+        paid: data.paid ?? false,
+        paidAt: data.paid ? new Date() : undefined,
       };
     });
     await Expense.insertMany(rows);
