@@ -1,6 +1,7 @@
 import "server-only";
 import { connectToDatabase } from "@/lib/db";
-import { SavingsAccount, Income, OWNER_ID } from "@/models/contable";
+import { SavingsAccount, Income } from "@/models/contable";
+import { getActiveProfileKey } from "@/lib/profile";
 import {
   currentPeriod,
   periodRange,
@@ -65,7 +66,8 @@ export async function getSavingsAccounts(
   includeArchived = false,
 ): Promise<SavingsAccountDTO[]> {
   await connectToDatabase();
-  const filter: Record<string, unknown> = { userId: OWNER_ID };
+  const uid = await getActiveProfileKey();
+  const filter: Record<string, unknown> = { userId: uid };
   if (!includeArchived) filter.archived = { $ne: true };
   const docs = await SavingsAccount.find(filter)
     .sort({ category: 1, name: 1 })
@@ -75,7 +77,8 @@ export async function getSavingsAccounts(
 
 export async function getIncomes(): Promise<IncomeDTO[]> {
   await connectToDatabase();
-  const docs = await Income.find({ userId: OWNER_ID })
+  const uid = await getActiveProfileKey();
+  const docs = await Income.find({ userId: uid })
     .sort({ active: -1, origin: 1, description: 1 })
     .lean();
   return docs.map((d) => mapIncome(d as Lean));

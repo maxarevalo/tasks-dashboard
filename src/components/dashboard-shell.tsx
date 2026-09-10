@@ -8,6 +8,8 @@ import { signOut } from "next-auth/react";
 import { Menu, X, LogOut, ArrowLeftRight } from "lucide-react";
 import type { Section } from "@/lib/nav";
 import { iconMap } from "@/lib/icons";
+import { ProfileSwitcher } from "@/components/profile-switcher";
+import type { ProfileDTO } from "@/lib/profile";
 
 type SessionUser = {
   name?: string | null;
@@ -18,10 +20,14 @@ type SessionUser = {
 export function DashboardShell({
   section,
   user,
+  profiles,
+  activeProfileKey,
   children,
 }: {
   section: Section;
   user: SessionUser;
+  profiles: ProfileDTO[];
+  activeProfileKey: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -126,6 +132,11 @@ export function DashboardShell({
           <h1 className="flex-1 truncate text-sm font-semibold text-slate-900">
             {section.label}
           </h1>
+
+          <ProfileSwitcher
+            profiles={profiles}
+            activeKey={activeProfileKey}
+          />
 
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">

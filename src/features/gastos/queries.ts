@@ -1,10 +1,10 @@
 import "server-only";
 import { connectToDatabase } from "@/lib/db";
+import { getActiveProfileKey } from "@/lib/profile";
 import {
   Card,
   Expense,
   FixedExpense,
-  OWNER_ID,
   EXPENSE_CATEGORIES,
 } from "@/models/gastos";
 import { addMonths, periodInRange, type Period } from "@/lib/period";
@@ -108,7 +108,8 @@ function buildSummary(expenses: ExpenseDTO[]): MonthSummary {
 
 export async function getCards(includeArchived = false): Promise<CardDTO[]> {
   await connectToDatabase();
-  const filter: Record<string, unknown> = { userId: OWNER_ID };
+  const uid = await getActiveProfileKey();
+  const filter: Record<string, unknown> = { userId: uid };
   if (!includeArchived) filter.archived = { $ne: true };
   const docs = await Card.find(filter).sort({ name: 1 }).lean();
   return docs.map(mapCard);
@@ -116,8 +117,9 @@ export async function getCards(includeArchived = false): Promise<CardDTO[]> {
 
 export async function getFixedExpenses(): Promise<FixedExpenseDTO[]> {
   await connectToDatabase();
+  const uid = await getActiveProfileKey();
   const [docs, cards] = await Promise.all([
-    FixedExpense.find({ userId: OWNER_ID }).sort({ active: -1, description: 1 }).lean(),
+    FixedExpense.find({ userId: uid }).sort({ active: -1, description: 1 }).lean(),
     getCards(true),
   ]);
   const cardName = new Map(cards.map((c) => [c.id, c.name]));
@@ -135,16 +137,17 @@ export async function getProjectedExpenseTotals(
   periods: Period[],
 ): Promise<Record<Period, { ARS: number; USD: number }>> {
   await connectToDatabase();
+  const uid = await getActiveProfileKey();
 
   const result: Record<Period, { ARS: number; USD: number }> = {};
   for (const p of periods) result[p] = { ARS: 0, USD: 0 };
   if (periods.length === 0) return result;
 
   const [expenseDocs, fixedDocs] = await Promise.all([
-    Expense.find({ userId: OWNER_ID, period: { $in: periods } })
+    Expense.find({ userId: uid, period: { $in: periods } })
       .select("period amount currency fixedId")
       .lean(),
-    FixedExpense.find({ userId: OWNER_ID, active: true })
+    FixedExpense.find({ userId: uid, active: true })
       .select("amount currency startPeriod endPeriod skipPeriods")
       .lean(),
   ]);
@@ -185,6 +188,7 @@ export async function getExpenseMatrix(
   currency: Currency,
 ): Promise<ExpenseMatrix> {
   await connectToDatabase();
+  const uid = await getActiveProfileKey();
 
   const empty: ExpenseMatrix = {
     periods,
@@ -198,16 +202,16 @@ export async function getExpenseMatrix(
 
   const other: Currency = currency === "ARS" ? "USD" : "ARS";
   const [expenseDocs, otherCount, cards, fixedDocs] = await Promise.all([
-    Expense.find({ userId: OWNER_ID, period: { $in: periods }, currency })
+    Expense.find({ userId: uid, period: { $in: periods }, currency })
       .select("period amount category description cardId fixedId")
       .lean(),
     Expense.countDocuments({
-      userId: OWNER_ID,
+      userId: uid,
       period: { $in: periods },
       currency: other,
     }),
     getCards(true),
-    FixedExpense.find({ userId: OWNER_ID, active: true, currency })
+    FixedExpense.find({ userId: uid, active: true, currency })
       .select(
         "description category cardId amount startPeriod endPeriod skipPeriods",
       )
@@ -323,13 +327,14 @@ export async function getExpenseMatrix(
 
 export async function getMonthData(period: Period): Promise<MonthData> {
   await connectToDatabase();
+  const uid = await getActiveProfileKey();
 
   const nextPeriod = addMonths(period, 1);
 
   const [expenseDocs, cards, fixedDocs] = await Promise.all([
-    Expense.find({ userId: OWNER_ID, period }).sort({ createdAt: 1 }).lean(),
+    Expense.find({ userId: uid, period }).sort({ createdAt: 1 }).lean(),
     getCards(true),
-    FixedExpense.find({ userId: OWNER_ID }).lean(),
+    FixedExpense.find({ userId: uid }).lean(),
   ]);
 
   const cardName = new Map(cards.map((c) => [c.id, c.name]));

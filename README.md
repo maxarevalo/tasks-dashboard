@@ -17,6 +17,21 @@ cómodo desde el celular y desde escritorio.
 
 Toda ruta que no sea `/login` está protegida por `src/proxy.ts` (middleware de auth).
 
+### Perfiles de datos (`/personal/perfiles`)
+
+Ambientes de datos separados sobre **la misma conexión de MongoDB** (ej.
+"Principal" con datos reales, "Ficticio" para pruebas). Cada documento de gastos,
+tarjetas, gastos fijos, ahorros e ingresos guarda `userId` = clave del perfil.
+
+- Selector en la barra superior + página de gestión.
+- Crear (arranca vacío), renombrar, **duplicar** (copia todos los datos con las
+  referencias remapeadas) y borrar (borra el perfil y **todos** sus datos).
+- El perfil activo se guarda en la cookie `profile`. Los datos previos a esta
+  feature quedan en el perfil por defecto ("Principal", clave `owner`).
+
+Código: `src/models/profile.ts`, `src/lib/profile.ts` (resuelve el perfil
+activo), `src/features/profiles/actions.ts`.
+
 ### Módulo: Gastos mensuales (`/personal/gastos`)
 
 - Vista por mes con navegación ‹ / › y "ir al mes actual".

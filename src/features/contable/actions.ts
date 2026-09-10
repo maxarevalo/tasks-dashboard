@@ -4,18 +4,22 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { connectToDatabase } from "@/lib/db";
-import { SavingsAccount, Income, OWNER_ID } from "@/models/contable";
+import { getActiveProfileKey } from "@/lib/profile";
+import { SavingsAccount, Income } from "@/models/contable";
 import { isValidPeriod } from "@/lib/period";
 import type { ActionResult } from "./types";
 
 const PATH = "/personal/estado-contable";
 
-async function run(fn: () => Promise<void>): Promise<ActionResult> {
+async function run(
+  fn: (uid: string) => Promise<void>,
+): Promise<ActionResult> {
   try {
     const session = await auth();
     if (!session?.user) throw new Error("No autenticado.");
     await connectToDatabase();
-    await fn();
+    const uid = await getActiveProfileKey();
+    await fn(uid);
     revalidatePath(PATH, "layout");
     return { ok: true };
   } catch (e) {
@@ -60,15 +64,15 @@ const accountInput = z.object({
 export async function createSavingsAccount(
   input: z.input<typeof accountInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const data = accountInput.parse(input);
     if (data.receivesNet) {
       await SavingsAccount.updateMany(
-        { userId: OWNER_ID, currency: data.currency },
+        { userId: uid, currency: data.currency },
         { $set: { receivesNet: false } },
       );
     }
-    await SavingsAccount.create({ userId: OWNER_ID, ...data });
+    await SavingsAccount.create({ userId: uid, ...data });
   });
 }
 
@@ -76,16 +80,16 @@ export async function updateSavingsAccount(
   id: string,
   input: z.input<typeof accountInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const data = accountInput.parse(input);
     if (data.receivesNet) {
       await SavingsAccount.updateMany(
-        { userId: OWNER_ID, currency: data.currency, _id: { $ne: id } },
+        { userId: uid, currency: data.currency, _id: { $ne: id } },
         { $set: { receivesNet: false } },
       );
     }
     await SavingsAccount.updateOne(
-      { _id: id, userId: OWNER_ID },
+      { _id: id, userId: uid },
       { $set: data },
     );
   });
@@ -95,17 +99,17 @@ export async function setSavingsArchived(
   id: string,
   archived: boolean,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     await SavingsAccount.updateOne(
-      { _id: id, userId: OWNER_ID },
+      { _id: id, userId: uid },
       { $set: { archived } },
     );
   });
 }
 
 export async function deleteSavingsAccount(id: string): Promise<ActionResult> {
-  return run(async () => {
-    await SavingsAccount.deleteOne({ _id: id, userId: OWNER_ID });
+  return run(async (uid) => {
+    await SavingsAccount.deleteOne({ _id: id, userId: uid });
   });
 }
 
@@ -118,14 +122,14 @@ export async function setManualProjection(
   id: string,
   input: z.input<typeof manualEntryInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const { period: p, amount } = manualEntryInput.parse(input);
     await SavingsAccount.updateOne(
-      { _id: id, userId: OWNER_ID },
+      { _id: id, userId: uid },
       { $pull: { manualProjections: { period: p } } },
     );
     await SavingsAccount.updateOne(
-      { _id: id, userId: OWNER_ID },
+      { _id: id, userId: uid },
       {
         $push: {
           manualProjections: { $each: [{ period: p, amount }], $sort: { period: 1 } },
@@ -139,10 +143,10 @@ export async function removeManualProjection(
   id: string,
   targetPeriod: string,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const p = period.parse(targetPeriod);
     await SavingsAccount.updateOne(
-      { _id: id, userId: OWNER_ID },
+      { _id: id, userId: uid },
       { $pull: { manualProjections: { period: p } } },
     );
   });
@@ -175,10 +179,10 @@ const incomeInput = z
 export async function createIncome(
   input: z.input<typeof incomeInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const data = incomeInput.parse(input);
     await Income.create({
-      userId: OWNER_ID,
+      userId: uid,
       ...data,
       endPeriod: data.endPeriod ?? null,
     });
@@ -189,10 +193,10 @@ export async function updateIncome(
   id: string,
   input: z.input<typeof incomeInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const data = incomeInput.parse(input);
     await Income.updateOne(
-      { _id: id, userId: OWNER_ID },
+      { _id: id, userId: uid },
       {
         $set: {
           ...data,
@@ -209,16 +213,16 @@ export async function setIncomeActive(
   id: string,
   active: boolean,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     await Income.updateOne(
-      { _id: id, userId: OWNER_ID },
+      { _id: id, userId: uid },
       { $set: { active } },
     );
   });
 }
 
 export async function deleteIncome(id: string): Promise<ActionResult> {
-  return run(async () => {
-    await Income.deleteOne({ _id: id, userId: OWNER_ID });
+  return run(async (uid) => {
+    await Income.deleteOne({ _id: id, userId: uid });
   });
 }

@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { connectToDatabase } from "@/lib/db";
-import { Card, Expense, FixedExpense, OWNER_ID } from "@/models/gastos";
+import { getActiveProfileKey } from "@/lib/profile";
+import { Card, Expense, FixedExpense } from "@/models/gastos";
 import { addMonths, currentPeriod as currentPeriodValue, isValidPeriod } from "@/lib/period";
 import type { ActionResult, DupStatus } from "./types";
 
@@ -24,11 +25,14 @@ function fail(error: string): ActionResult {
   return { ok: false, error };
 }
 
-async function run(fn: () => Promise<void>): Promise<ActionResult> {
+async function run(
+  fn: (uid: string) => Promise<void>,
+): Promise<ActionResult> {
   try {
     await requireSession();
     await connectToDatabase();
-    await fn();
+    const uid = await getActiveProfileKey();
+    await fn(uid);
     revalidate();
     return { ok: true };
   } catch (e) {
@@ -132,6 +136,7 @@ type FixedTemplateLike = {
  * ni editadas a mano con los valores actuales de la plantilla.
  */
 async function materializeFixedRange(
+  uid: string,
   template: FixedTemplateLike,
   from: string,
   to: string,
@@ -161,7 +166,7 @@ async function materializeFixedRange(
   };
 
   const existing = await Expense.find({
-    userId: OWNER_ID,
+    userId: uid,
     fixedId: template._id,
     period: { $in: periods },
   })
@@ -173,7 +178,7 @@ async function materializeFixedRange(
     const rows = periods
       .filter((p) => !done.has(p))
       .map((p) => ({
-        userId: OWNER_ID,
+        userId: uid,
         period: p,
         ...values,
         source: "fixed" as const,
@@ -190,7 +195,7 @@ async function materializeFixedRange(
   if (updateExisting) {
     await Expense.updateMany(
       {
-        userId: OWNER_ID,
+        userId: uid,
         fixedId: template._id,
         period: { $in: periods },
         paid: { $ne: true },
@@ -206,10 +211,10 @@ async function materializeFixedRange(
 export async function createExpense(
   input: z.input<typeof expenseInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const data = expenseInput.parse(input);
     await Expense.create({
-      userId: OWNER_ID,
+      userId: uid,
       ...data,
       cardId: data.category === "tarjeta" ? data.cardId : undefined,
       source: "manual",
@@ -221,7 +226,7 @@ export async function createExpense(
 export async function createExpensesBulk(
   items: z.input<typeof bulkExpenseInput>[],
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     if (!Array.isArray(items) || items.length === 0) {
       throw new Error("No hay items para importar.");
     }
@@ -231,7 +236,7 @@ export async function createExpensesBulk(
     const rows = items.map((raw) => {
       const data = bulkExpenseInput.parse(raw);
       return {
-        userId: OWNER_ID,
+        userId: uid,
         period: data.period,
         category: data.category,
         description: data.description,
@@ -258,6 +263,7 @@ export async function checkBulkDuplicates(
   try {
     await requireSession();
     await connectToDatabase();
+    const uid = await getActiveProfileKey();
     if (!Array.isArray(probes) || probes.length === 0) return [];
 
     const norm = (s: string) => s.trim().toLowerCase();
@@ -265,7 +271,7 @@ export async function checkBulkDuplicates(
       ...new Set(probes.map((p) => p.period).filter(isValidPeriod)),
     ];
     const existing = await Expense.find({
-      userId: OWNER_ID,
+      userId: uid,
       period: { $in: periods },
     })
       .select("description amount period")
@@ -295,7 +301,7 @@ export async function checkBulkDuplicates(
 export async function createInstallmentPurchase(
   input: z.input<typeof installmentInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const data = installmentInput.parse(input);
     if (data.current > data.total) {
       throw new Error("La cuota inicial no puede ser mayor al total.");
@@ -303,7 +309,7 @@ export async function createInstallmentPurchase(
     const remaining = data.total - data.current + 1;
     const groupId = randomUUID();
     const rows = Array.from({ length: remaining }, (_, k) => ({
-      userId: OWNER_ID,
+      userId: uid,
       period: addMonths(data.startPeriod, k),
       category: data.category,
       description: data.description,
@@ -322,9 +328,9 @@ export async function updateExpense(
   id: string,
   patch: Partial<z.input<typeof expenseInput>>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const data = expenseInput.partial().parse(patch);
-    const row = await Expense.findOne({ _id: id, userId: OWNER_ID })
+    const row = await Expense.findOne({ _id: id, userId: uid })
       .select("source")
       .lean();
     // Un gasto fijo editado a mano queda "fijado": no se pisa al propagar
@@ -334,7 +340,7 @@ export async function updateExpense(
         ? { overridden: true }
         : {};
     await Expense.updateOne(
-      { _id: id, userId: OWNER_ID },
+      { _id: id, userId: uid },
       { $set: { ...data, ...extra } },
     );
   });
@@ -344,8 +350,8 @@ export async function updateExpense(
 export async function skipFixedForPeriod(
   expenseId: string,
 ): Promise<ActionResult> {
-  return run(async () => {
-    const row = await Expense.findOne({ _id: expenseId, userId: OWNER_ID })
+  return run(async (uid) => {
+    const row = await Expense.findOne({ _id: expenseId, userId: uid })
       .select("source fixedId period")
       .lean();
     const doc = row as
@@ -355,10 +361,10 @@ export async function skipFixedForPeriod(
       throw new Error("Ese gasto no viene de una plantilla de gasto fijo.");
     }
     await FixedExpense.updateOne(
-      { _id: doc.fixedId, userId: OWNER_ID },
+      { _id: doc.fixedId, userId: uid },
       { $addToSet: { skipPeriods: doc.period } },
     );
-    await Expense.deleteOne({ _id: expenseId, userId: OWNER_ID });
+    await Expense.deleteOne({ _id: expenseId, userId: uid });
   });
 }
 
@@ -367,18 +373,18 @@ export async function restoreFixedForPeriod(
   fixedId: string,
   targetPeriod: string,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const p = period.parse(targetPeriod);
     await FixedExpense.updateOne(
-      { _id: fixedId, userId: OWNER_ID },
+      { _id: fixedId, userId: uid },
       { $pull: { skipPeriods: p } },
     );
     const t = await FixedExpense.findOne({
       _id: fixedId,
-      userId: OWNER_ID,
+      userId: uid,
     }).lean();
     if (t) {
-      await materializeFixedRange(t as unknown as FixedTemplateLike, p, p);
+      await materializeFixedRange(uid, t as unknown as FixedTemplateLike, p, p);
     }
   });
 }
@@ -387,9 +393,9 @@ export async function setExpensePaid(
   id: string,
   paid: boolean,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     await Expense.updateOne(
-      { _id: id, userId: OWNER_ID },
+      { _id: id, userId: uid },
       { $set: { paid, paidAt: paid ? new Date() : null } },
     );
   });
@@ -399,16 +405,16 @@ export async function deleteExpense(
   id: string,
   scope: "one" | "group-future" | "group-all" = "one",
 ): Promise<ActionResult> {
-  return run(async () => {
-    const doc = await Expense.findOne({ _id: id, userId: OWNER_ID }).lean();
+  return run(async (uid) => {
+    const doc = await Expense.findOne({ _id: id, userId: uid }).lean();
     if (!doc) throw new Error("No se encontró el gasto.");
     const groupId = (doc as { groupId?: string }).groupId;
 
     if (scope === "one" || !groupId) {
-      await Expense.deleteOne({ _id: id, userId: OWNER_ID });
+      await Expense.deleteOne({ _id: id, userId: uid });
       return;
     }
-    const filter: Record<string, unknown> = { userId: OWNER_ID, groupId };
+    const filter: Record<string, unknown> = { userId: uid, groupId };
     if (scope === "group-future") {
       filter.period = { $gte: (doc as { period: string }).period };
     }
@@ -421,9 +427,9 @@ export async function deleteExpense(
 export async function createCard(
   input: z.input<typeof cardInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const data = cardInput.parse(input);
-    await Card.create({ userId: OWNER_ID, ...data });
+    await Card.create({ userId: uid, ...data });
   });
 }
 
@@ -431,9 +437,9 @@ export async function updateCard(
   id: string,
   input: z.input<typeof cardInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const data = cardInput.parse(input);
-    await Card.updateOne({ _id: id, userId: OWNER_ID }, { $set: data });
+    await Card.updateOne({ _id: id, userId: uid }, { $set: data });
   });
 }
 
@@ -441,8 +447,8 @@ export async function setCardArchived(
   id: string,
   archived: boolean,
 ): Promise<ActionResult> {
-  return run(async () => {
-    await Card.updateOne({ _id: id, userId: OWNER_ID }, { $set: { archived } });
+  return run(async (uid) => {
+    await Card.updateOne({ _id: id, userId: uid }, { $set: { archived } });
   });
 }
 
@@ -451,12 +457,13 @@ export async function setCardArchived(
 export async function createFixedExpense(
   input: z.input<typeof createFixedInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const { applyFrom, ...data } = createFixedInput.parse(input);
-    const doc = await FixedExpense.create({ userId: OWNER_ID, ...data });
+    const doc = await FixedExpense.create({ userId: uid, ...data });
 
     if (applyFrom) {
       await materializeFixedRange(
+        uid,
         doc.toObject() as unknown as FixedTemplateLike,
         applyFrom,
         addMonths(applyFrom, AUTO_FIXED_HORIZON),
@@ -469,7 +476,7 @@ export async function updateFixedExpense(
   id: string,
   input: z.input<typeof createFixedInput>,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const { applyFrom, ...data } = createFixedInput.parse(input);
 
     const update: Record<string, unknown> = {
@@ -480,15 +487,16 @@ export async function updateFixedExpense(
       // de ahí en adelante para que se vuelvan a generar.
       update.$pull = { skipPeriods: { $gte: applyFrom } };
     }
-    await FixedExpense.updateOne({ _id: id, userId: OWNER_ID }, update);
+    await FixedExpense.updateOne({ _id: id, userId: uid }, update);
 
     if (applyFrom) {
       const doc = await FixedExpense.findOne({
         _id: id,
-        userId: OWNER_ID,
+        userId: uid,
       }).lean();
       if (doc) {
         await materializeFixedRange(
+          uid,
           doc as unknown as FixedTemplateLike,
           applyFrom,
           addMonths(applyFrom, AUTO_FIXED_HORIZON),
@@ -503,11 +511,11 @@ export async function updateFixedExpense(
 }
 
 export async function deleteFixedExpense(id: string): Promise<ActionResult> {
-  return run(async () => {
-    await FixedExpense.deleteOne({ _id: id, userId: OWNER_ID });
+  return run(async (uid) => {
+    await FixedExpense.deleteOne({ _id: id, userId: uid });
     // Limpia las ocurrencias futuras no pagadas; deja el historial intacto.
     await Expense.deleteMany({
-      userId: OWNER_ID,
+      userId: uid,
       fixedId: id,
       paid: { $ne: true },
       period: { $gte: currentPeriodValue() },
@@ -520,10 +528,10 @@ export async function generateFixedForPeriod(
   targetPeriod: string,
   onlyAuto = false,
 ): Promise<ActionResult> {
-  return run(async () => {
+  return run(async (uid) => {
     const p = period.parse(targetPeriod);
     const templateFilter: Record<string, unknown> = {
-      userId: OWNER_ID,
+      userId: uid,
       active: true,
       startPeriod: { $lte: p },
     };
@@ -531,7 +539,7 @@ export async function generateFixedForPeriod(
     const templates = await FixedExpense.find(templateFilter).lean();
 
     const existing = await Expense.find({
-      userId: OWNER_ID,
+      userId: uid,
       period: p,
       fixedId: { $exists: true },
     })
@@ -547,7 +555,7 @@ export async function generateFixedForPeriod(
         return (!end || p <= end) && !skipped && !done.has(String(t._id));
       })
       .map((t) => ({
-        userId: OWNER_ID,
+        userId: uid,
         period: p,
         category: (t.category as string) ?? "fijo",
         description: t.description,
