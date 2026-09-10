@@ -24,19 +24,30 @@ const cached: MongooseCache =
 
 globalForMongoose._mongoose = cached;
 
+const CONNECT_OPTS: mongoose.ConnectOptions = {
+  bufferCommands: false,
+  serverSelectionTimeoutMS: 8000,
+};
+
 export async function connectToDatabase(): Promise<typeof mongoose> {
-  if (cached.conn) return cached.conn;
+  // readyState: 0 disconnected, 1 connected, 2 connecting, 3 disconnecting
+  if (cached.conn && mongoose.connection.readyState === 1) {
+    return cached.conn;
+  }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI!, {
-      bufferCommands: false,
-    });
+    // Si quedó a medio camino de un intento fallido, reseteá antes de reintentar.
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.disconnect().catch(() => {});
+    }
+    cached.promise = mongoose.connect(MONGODB_URI!, CONNECT_OPTS);
   }
 
   try {
     cached.conn = await cached.promise;
   } catch (error) {
     cached.promise = null;
+    cached.conn = null;
     // Re-lanzar un Error plano: el original es una instancia de clase de
     // mongoose que no se puede serializar hacia el cliente.
     throw new Error(
