@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Wallet, PiggyBank, TrendingUp } from "lucide-react";
+import { Wallet, PiggyBank, TrendingUp, Layers } from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
 import { formatMoney } from "@/lib/money";
 import { periodLabel } from "@/lib/period";
@@ -69,6 +69,13 @@ export default async function EstadoContablePage({
         >
           <TrendingUp className="h-4 w-4" />
           Ingresos
+        </Link>
+        <Link
+          href="/personal/estado-contable/unificado"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <Layers className="h-4 w-4" />
+          Vista unificada
         </Link>
       </div>
 

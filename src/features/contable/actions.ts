@@ -5,7 +5,14 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { connectToDatabase } from "@/lib/db";
 import { getActiveProfileKey } from "@/lib/profile";
-import { SavingsAccount, Income } from "@/models/contable";
+import {
+  SavingsAccount,
+  Income,
+  ExchangeRate,
+  DOLLAR_TYPES,
+  RATE_BASIS,
+} from "@/models/contable";
+import { fetchDollar } from "@/lib/exchange";
 import { isValidPeriod } from "@/lib/period";
 import type { ActionResult } from "./types";
 
@@ -224,5 +231,61 @@ export async function setIncomeActive(
 export async function deleteIncome(id: string): Promise<ActionResult> {
   return run(async (uid) => {
     await Income.deleteOne({ _id: id, userId: uid });
+  });
+}
+
+/* ------------------------------ Cotización ---------------------------- */
+
+const rateInput = z.object({
+  mode: z.enum(["manual", "api"]),
+  manualBuy: z.coerce.number().min(0).default(0),
+  manualSell: z.coerce.number().min(0).default(0),
+  apiType: z.enum(DOLLAR_TYPES),
+  basis: z.enum(RATE_BASIS),
+});
+
+export async function setExchangeRate(
+  input: z.input<typeof rateInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = rateInput.parse(input);
+    await ExchangeRate.updateOne(
+      { userId: uid },
+      { $set: data },
+      { upsert: true },
+    );
+    if (data.mode === "api") {
+      const r = await fetchDollar(data.apiType);
+      if (r) {
+        await ExchangeRate.updateOne(
+          { userId: uid },
+          { $set: { cachedBuy: r.buy, cachedSell: r.sell, fetchedAt: new Date() } },
+        );
+      }
+    }
+  });
+}
+
+export async function refreshExchangeRate(): Promise<ActionResult> {
+  return run(async (uid) => {
+    const doc = await ExchangeRate.findOne({ userId: uid }).lean();
+    const apiType =
+      ((doc as { apiType?: string } | null)?.apiType as
+        | (typeof DOLLAR_TYPES)[number]
+        | undefined) ?? "blue";
+    const r = await fetchDollar(apiType);
+    if (!r) throw new Error("No se pudo obtener la cotización de la API.");
+    await ExchangeRate.updateOne(
+      { userId: uid },
+      {
+        $set: {
+          cachedBuy: r.buy,
+          cachedSell: r.sell,
+          fetchedAt: new Date(),
+          mode: "api",
+        },
+      },
+      { upsert: true },
+    );
   });
 }

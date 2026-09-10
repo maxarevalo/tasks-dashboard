@@ -1,6 +1,6 @@
 import "server-only";
 import { connectToDatabase } from "@/lib/db";
-import { SavingsAccount, Income } from "@/models/contable";
+import { SavingsAccount, Income, ExchangeRate } from "@/models/contable";
 import { getActiveProfileKey } from "@/lib/profile";
 import {
   currentPeriod,
@@ -8,6 +8,7 @@ import {
   type Period,
 } from "@/lib/period";
 import { CURRENCIES, type Currency } from "@/lib/money";
+import { effectiveRate, convertAmount } from "@/lib/exchange";
 import { getProjectedExpenseTotals } from "@/features/gastos/queries";
 import { buildProjection } from "./projection";
 import type {
@@ -15,6 +16,9 @@ import type {
   IncomeDTO,
   ContableOverview,
   CurrencyProjection,
+  ExchangeRateDTO,
+  UnifiedOverview,
+  UnifiedProjection,
 } from "./types";
 import { AVAILABILITY } from "@/models/contable";
 
@@ -180,4 +184,105 @@ export async function getProjection(
   );
 
   return { period, projections };
+}
+
+/* ------------------------------ Cotización ---------------------------- */
+
+export async function getExchangeRate(): Promise<ExchangeRateDTO> {
+  await connectToDatabase();
+  const uid = await getActiveProfileKey();
+  let doc = await ExchangeRate.findOne({ userId: uid }).lean();
+  if (!doc) {
+    await ExchangeRate.create({ userId: uid }).catch(() => {});
+    doc = await ExchangeRate.findOne({ userId: uid }).lean();
+  }
+  const d = (doc ?? {}) as Record<string, unknown>;
+  const base = {
+    mode: (d.mode as "manual" | "api") ?? "manual",
+    manualBuy: (d.manualBuy as number) ?? 0,
+    manualSell: (d.manualSell as number) ?? 0,
+    apiType: (d.apiType as ExchangeRateDTO["apiType"]) ?? "blue",
+    cachedBuy: (d.cachedBuy as number) ?? 0,
+    cachedSell: (d.cachedSell as number) ?? 0,
+    fetchedAt: d.fetchedAt ? new Date(d.fetchedAt as string).toISOString() : null,
+    basis: (d.basis as ExchangeRateDTO["basis"]) ?? "promedio",
+  };
+  const eff = effectiveRate(base);
+  return { ...base, ...eff };
+}
+
+/* ---------------------------- Vista unificada ------------------------- */
+
+export async function getUnifiedOverview(
+  displayCurrency: Currency,
+): Promise<UnifiedOverview> {
+  const [ov, rate] = await Promise.all([
+    getContableOverview(),
+    getExchangeRate(),
+  ]);
+  const conv = (v: number, from: Currency) =>
+    convertAmount(v, from, displayCurrency, rate.value);
+  const sum2 = (r: Record<Currency, number>) =>
+    conv(r.ARS, "ARS") + conv(r.USD, "USD");
+
+  return {
+    period: ov.period,
+    displayCurrency,
+    rate,
+    savingsTotal: sum2(ov.savingsTotal),
+    incomeThisMonth: sum2(ov.incomeThisMonth),
+    expenseThisMonth: sum2(ov.expenseThisMonth),
+    availableThisMonth: sum2(ov.availableThisMonth),
+    savingsFrom: {
+      ARS: conv(ov.savingsTotal.ARS, "ARS"),
+      USD: conv(ov.savingsTotal.USD, "USD"),
+    },
+  };
+}
+
+export async function getUnifiedProjection(
+  months: number,
+  displayCurrency: Currency,
+): Promise<{ period: Period; projection: UnifiedProjection }> {
+  const [{ period, projections }, rate] = await Promise.all([
+    getProjection(months),
+    getExchangeRate(),
+  ]);
+  const ars = projections.find((p) => p.currency === "ARS");
+  const usd = projections.find((p) => p.currency === "USD");
+  const conv = (v: number, from: Currency) =>
+    convertAmount(v, from, displayCurrency, rate.value);
+
+  const arsMonths = ars?.months ?? [];
+  const usdMonths = usd?.months ?? [];
+
+  const monthsOut = arsMonths.map((m, i) => {
+    const u = usdMonths[i] ?? {
+      income: 0,
+      expense: 0,
+      net: 0,
+      interest: 0,
+      balance: 0,
+    };
+    return {
+      period: m.period,
+      income: conv(m.income, "ARS") + conv(u.income, "USD"),
+      expense: conv(m.expense, "ARS") + conv(u.expense, "USD"),
+      net: conv(m.net, "ARS") + conv(u.net, "USD"),
+      interest: conv(m.interest, "ARS") + conv(u.interest, "USD"),
+      balance: conv(m.balance, "ARS") + conv(u.balance, "USD"),
+    };
+  });
+
+  return {
+    period,
+    projection: {
+      displayCurrency,
+      rate,
+      startingBalance:
+        conv(ars?.startingBalance ?? 0, "ARS") +
+        conv(usd?.startingBalance ?? 0, "USD"),
+      months: monthsOut,
+    },
+  };
 }

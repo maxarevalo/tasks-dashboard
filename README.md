@@ -105,6 +105,12 @@ Cruza con Gastos para proyectar el saldo.
   **saldo acumulado**. Gráfico de línea + tabla, marca cuándo el saldo se
   vuelve negativo.
 - **Disponible en el mes** = ahorros totales + ingresos − gastos del mes.
+- **Vista unificada** (`/personal/estado-contable/unificado`): todo convertido a
+  **una sola moneda** (elegís ARS o USD). Cotización USD/ARS configurable —
+  **a mano** (compra + venta) o **desde API** (dolarapi.com: oficial, blue, MEP,
+  cripto, tarjeta, mayorista) con botón "Actualizar" y auto-refresco si está
+  vieja (>6 h). El valor usado para convertir se elige entre compra, venta o
+  promedio. Helper en `src/lib/exchange.ts`.
 
 Código: `src/models/contable.ts`, `src/features/contable/` (queries, actions,
 `projection.ts` con la matemática pura), `src/lib/rates.ts`.

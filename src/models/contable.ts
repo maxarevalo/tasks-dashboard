@@ -1,7 +1,10 @@
 import { Schema, model, models, type InferSchemaType } from "mongoose";
 import { OWNER_ID } from "./gastos";
+import { DOLLAR_TYPES, RATE_BASIS } from "@/lib/exchange";
 
 export { OWNER_ID };
+export { DOLLAR_TYPES, RATE_BASIS } from "@/lib/exchange";
+export type { DollarType, RateBasis } from "@/lib/exchange";
 
 const CURRENCY_ENUM = ["ARS", "USD"] as const;
 
@@ -89,3 +92,29 @@ incomeSchema.index({ userId: 1, active: 1 });
 
 export type IncomeDoc = InferSchemaType<typeof incomeSchema>;
 export const Income = models.Income ?? model("Income", incomeSchema);
+
+/* ---------------------------- ExchangeRate ---------------------------- */
+
+/** Un doc por perfil. Cotización USD/ARS para la vista unificada. */
+const exchangeRateSchema = new Schema(
+  {
+    userId: { type: String, required: true, default: OWNER_ID, unique: true },
+    mode: { type: String, enum: ["manual", "api"], default: "manual" },
+    /** Valores cargados a mano (ARS por 1 USD). */
+    manualBuy: { type: Number, default: 0 },
+    manualSell: { type: Number, default: 0 },
+    /** Tipo de dólar para el modo API (dolarapi.com). */
+    apiType: { type: String, enum: DOLLAR_TYPES, default: "blue" },
+    /** Últimos valores traídos de la API. */
+    cachedBuy: { type: Number, default: 0 },
+    cachedSell: { type: Number, default: 0 },
+    fetchedAt: { type: Date },
+    /** Qué valor se usa para convertir en la vista unificada. */
+    basis: { type: String, enum: RATE_BASIS, default: "promedio" },
+  },
+  { timestamps: true },
+);
+
+export type ExchangeRateDoc = InferSchemaType<typeof exchangeRateSchema>;
+export const ExchangeRate =
+  models.ExchangeRate ?? model("ExchangeRate", exchangeRateSchema);
