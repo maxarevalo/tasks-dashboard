@@ -37,7 +37,11 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
     cached.conn = await cached.promise;
   } catch (error) {
     cached.promise = null;
-    throw error;
+    // Re-lanzar un Error plano: el original es una instancia de clase de
+    // mongoose que no se puede serializar hacia el cliente.
+    throw new Error(
+      `No se pudo conectar a MongoDB. ${(error as Error).message}`,
+    );
   }
 
   return cached.conn;

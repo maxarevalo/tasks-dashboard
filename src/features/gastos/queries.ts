@@ -120,6 +120,55 @@ export async function getFixedExpenses(): Promise<FixedExpenseDTO[]> {
   );
 }
 
+/**
+ * Total de gastos por mes y moneda, para la proyección del módulo contable.
+ * Incluye lo materializado + las plantillas de gastos fijos activas que
+ * todavía no se cargaron en ese mes (así la proyección contempla los fijos).
+ */
+export async function getProjectedExpenseTotals(
+  periods: Period[],
+): Promise<Record<Period, { ARS: number; USD: number }>> {
+  await connectToDatabase();
+
+  const result: Record<Period, { ARS: number; USD: number }> = {};
+  for (const p of periods) result[p] = { ARS: 0, USD: 0 };
+  if (periods.length === 0) return result;
+
+  const [expenseDocs, fixedDocs] = await Promise.all([
+    Expense.find({ userId: OWNER_ID, period: { $in: periods } })
+      .select("period amount currency fixedId")
+      .lean(),
+    FixedExpense.find({ userId: OWNER_ID, active: true })
+      .select("amount currency startPeriod endPeriod skipPeriods")
+      .lean(),
+  ]);
+
+  const materialized = new Set<string>(); // `${period}|${fixedId}`
+  for (const e of expenseDocs) {
+    const p = String(e.period);
+    if (!result[p]) continue;
+    const cur = (e.currency as "ARS" | "USD") ?? "ARS";
+    result[p][cur] += (e.amount as number) ?? 0;
+    if (e.fixedId) materialized.add(`${p}|${String(e.fixedId)}`);
+  }
+
+  for (const p of periods) {
+    for (const f of fixedDocs) {
+      const start = String(f.startPeriod);
+      const end = (f.endPeriod as string) ?? null;
+      const skips = Array.isArray(f.skipPeriods)
+        ? (f.skipPeriods as string[])
+        : [];
+      if (p < start || (end && p > end) || skips.includes(p)) continue;
+      if (materialized.has(`${p}|${String(f._id)}`)) continue;
+      const cur = (f.currency as "ARS" | "USD") ?? "ARS";
+      result[p][cur] += (f.amount as number) ?? 0;
+    }
+  }
+
+  return result;
+}
+
 export async function getMonthData(period: Period): Promise<MonthData> {
   await connectToDatabase();
 
