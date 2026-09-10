@@ -8,12 +8,18 @@ import {
   EXPENSE_CATEGORIES,
 } from "@/models/gastos";
 import { addMonths, periodInRange, type Period } from "@/lib/period";
-import type {
-  CardDTO,
-  ExpenseDTO,
-  FixedExpenseDTO,
-  MonthData,
-  MonthSummary,
+import type { Currency } from "@/lib/money";
+import {
+  CATEGORY_ORDER,
+  type CardDTO,
+  type ExpenseDTO,
+  type ExpenseCategory,
+  type ExpenseMatrix,
+  type FixedExpenseDTO,
+  type MatrixCell,
+  type MatrixRow,
+  type MonthData,
+  type MonthSummary,
 } from "./types";
 
 type Lean = Record<string, unknown>;
@@ -167,6 +173,152 @@ export async function getProjectedExpenseTotals(
   }
 
   return result;
+}
+
+/**
+ * Matriz de gastos: filas = gasto (por categoría + descripción + tarjeta),
+ * columnas = meses del rango. Incluye los gastos fijos activos como celdas
+ * "estimadas" en los meses donde todavía no se materializaron.
+ */
+export async function getExpenseMatrix(
+  periods: Period[],
+  currency: Currency,
+): Promise<ExpenseMatrix> {
+  await connectToDatabase();
+
+  const empty: ExpenseMatrix = {
+    periods,
+    currency,
+    groups: [],
+    columnTotals: Object.fromEntries(periods.map((p) => [p, 0])),
+    grandTotal: 0,
+    hasOtherCurrency: false,
+  };
+  if (periods.length === 0) return empty;
+
+  const other: Currency = currency === "ARS" ? "USD" : "ARS";
+  const [expenseDocs, otherCount, cards, fixedDocs] = await Promise.all([
+    Expense.find({ userId: OWNER_ID, period: { $in: periods }, currency })
+      .select("period amount category description cardId fixedId")
+      .lean(),
+    Expense.countDocuments({
+      userId: OWNER_ID,
+      period: { $in: periods },
+      currency: other,
+    }),
+    getCards(true),
+    FixedExpense.find({ userId: OWNER_ID, active: true, currency })
+      .select(
+        "description category cardId amount startPeriod endPeriod skipPeriods",
+      )
+      .lean(),
+  ]);
+
+  const cardNameById = new Map(cards.map((c) => [c.id, c.name]));
+  const periodSet = new Set(periods);
+
+  type MutableRow = MatrixRow & { cells: Record<Period, MatrixCell> };
+  const rowMap = new Map<string, MutableRow>();
+
+  const rowFor = (
+    category: ExpenseCategory,
+    description: string,
+    cardId: string | null,
+  ): MutableRow => {
+    const key = `${category}|${description.trim().toLowerCase()}|${cardId ?? ""}`;
+    let row = rowMap.get(key);
+    if (!row) {
+      row = {
+        key,
+        category,
+        description: description.trim(),
+        cardName: cardId ? (cardNameById.get(cardId) ?? null) : null,
+        cells: {},
+        total: 0,
+      };
+      rowMap.set(key, row);
+    }
+    return row;
+  };
+
+  const materialized = new Set<string>(); // `${period}|${fixedId}`
+
+  for (const e of expenseDocs) {
+    const p = String(e.period);
+    if (!periodSet.has(p)) continue;
+    const cardId = e.cardId ? String(e.cardId) : null;
+    const row = rowFor(
+      e.category as ExpenseCategory,
+      String(e.description),
+      cardId,
+    );
+    const amount = (e.amount as number) ?? 0;
+    const cell = row.cells[p] ?? { amount: 0, estimated: false };
+    cell.amount += amount;
+    row.cells[p] = cell;
+    row.total += amount;
+    if (e.fixedId) materialized.add(`${p}|${String(e.fixedId)}`);
+  }
+
+  // Gastos fijos activos -> celdas "estimadas" en los meses sin materializar.
+  for (const f of fixedDocs) {
+    const skips = Array.isArray(f.skipPeriods)
+      ? (f.skipPeriods as string[])
+      : [];
+    const cardId = f.cardId ? String(f.cardId) : null;
+    const amount = (f.amount as number) ?? 0;
+    for (const p of periods) {
+      if (
+        !periodInRange(p, String(f.startPeriod), (f.endPeriod as string) ?? null)
+      )
+        continue;
+      if (skips.includes(p)) continue;
+      if (materialized.has(`${p}|${String(f._id)}`)) continue;
+      const row = rowFor(
+        (f.category as ExpenseCategory) ?? "fijo",
+        String(f.description),
+        cardId,
+      );
+      if (row.cells[p]) continue; // ya hay algo real ahí
+      row.cells[p] = { amount, estimated: true };
+      row.total += amount;
+    }
+  }
+
+  // Agrupar por categoría, ordenar, totalizar.
+  const columnTotals: Record<Period, number> = Object.fromEntries(
+    periods.map((p) => [p, 0]),
+  );
+  let grandTotal = 0;
+
+  const groups = CATEGORY_ORDER.map((category) => {
+    const rows = [...rowMap.values()]
+      .filter((r) => r.category === category)
+      .sort((a, b) => b.total - a.total);
+    const subtotals: Record<Period, number> = Object.fromEntries(
+      periods.map((p) => [p, 0]),
+    );
+    let total = 0;
+    for (const r of rows) {
+      for (const p of periods) {
+        const v = r.cells[p]?.amount ?? 0;
+        subtotals[p] += v;
+        columnTotals[p] += v;
+      }
+      total += r.total;
+    }
+    grandTotal += total;
+    return { category, rows, subtotals, total };
+  }).filter((g) => g.rows.length > 0);
+
+  return {
+    periods,
+    currency,
+    groups,
+    columnTotals,
+    grandTotal,
+    hasOtherCurrency: otherCount > 0,
+  };
 }
 
 export async function getMonthData(period: Period): Promise<MonthData> {

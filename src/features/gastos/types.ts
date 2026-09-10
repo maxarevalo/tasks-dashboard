@@ -107,3 +107,33 @@ export const CATEGORY_ORDER: ExpenseCategory[] = [
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export type DupStatus = { exact: boolean; sameName: boolean };
+
+/* ------------------------- Tabla mensual (matriz) ---------------------- */
+
+export type MatrixCell = { amount: number; estimated: boolean };
+
+export type MatrixRow = {
+  key: string;
+  category: ExpenseCategory;
+  description: string;
+  cardName: string | null;
+  cells: Record<Period, MatrixCell>;
+  total: number;
+};
+
+export type MatrixGroup = {
+  category: ExpenseCategory;
+  rows: MatrixRow[];
+  subtotals: Record<Period, number>;
+  total: number;
+};
+
+export type ExpenseMatrix = {
+  periods: Period[];
+  currency: Currency;
+  groups: MatrixGroup[];
+  columnTotals: Record<Period, number>;
+  grandTotal: number;
+  /** true si hay gastos en la otra moneda (para ofrecer el toggle). */
+  hasOtherCurrency: boolean;
+};

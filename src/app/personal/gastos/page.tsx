@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CreditCard, Repeat, Receipt, CalendarX } from "lucide-react";
+import { CreditCard, Repeat, Receipt, CalendarX, Table2 } from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
 import { normalizePeriod, addMonths, periodLabel } from "@/lib/period";
 import { getMonthData } from "@/features/gastos/queries";
@@ -30,7 +30,14 @@ export default async function GastosPage({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <MonthNav period={period} />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/personal/gastos/tabla"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Table2 className="h-4 w-4" />
+            Tabla mensual
+          </Link>
           <Link
             href="/personal/gastos/tarjetas"
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"

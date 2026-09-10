@@ -41,6 +41,10 @@ Toda ruta que no sea `/login` está protegida por `src/proxy.ts` (middleware de 
     alcanzada, pausado o plantilla borrada), la fila muestra un badge y el mes
     un banner.
 - Marcar pagado / pendiente por gasto.
+- **Tabla mensual** (`/personal/gastos/tabla`): matriz con un mes por columna
+  (ventanas de 10 meses, navegables ‹/›), filas agrupadas por categoría,
+  subtotales por categoría y total por mes. Toggle ARS/USD. Los gastos fijos
+  sin cargar aparecen como celdas estimadas (cursiva + `*`).
 - **Importar masivo** (botón "Importar"): se pega **un array JSON** (recomendado)
   o el texto crudo del resumen de tarjeta. Segundo paso: se edita cada ítem
   (mes, categoría, moneda, tarjeta, monto, pagado) o se aplica categoría/tarjeta
