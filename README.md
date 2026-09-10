@@ -70,8 +70,25 @@ Código: modelos en `src/models/gastos.ts`, lecturas en
 `src/features/gastos/queries.ts`, mutaciones (Server Actions) en
 `src/features/gastos/actions.ts`.
 
-**Pendiente (próximas etapas):** ingresos por origen, ahorros ARS/USD,
-proyección de ahorro del mes siguiente, y gráficos.
+### Módulo: Estado contable (`/personal/estado-contable`)
+
+Cruza con Gastos para proyectar el saldo.
+
+- **Ahorros** (`/ahorros`): cuentas por **categoría** y **disponibilidad**
+  (inmediata / corto plazo / inmovilizada), en ARS o USD, con saldo actual y
+  **rendimiento** configurable por cuenta: TNA o TEA (capitalizan mes a mes),
+  tasa mensual directa (sin capitalizar), o **saldos cargados a mano** por mes.
+  Una cuenta por moneda se marca "acá cae el excedente del mes".
+- **Ingresos** (`/ingresos`): por **origen**, mensuales fijos o únicos,
+  "confirmados" o "posibles".
+- **Proyección**: horizonte 6/12/24 meses, por moneda. Cada mes muestra
+  ingresos, gastos (materializados + fijos que van a caer), neto, rendimiento y
+  **saldo acumulado**. Gráfico de línea + tabla, marca cuándo el saldo se
+  vuelve negativo.
+- **Disponible en el mes** = ahorros totales + ingresos − gastos del mes.
+
+Código: `src/models/contable.ts`, `src/features/contable/` (queries, actions,
+`projection.ts` con la matemática pura), `src/lib/rates.ts`.
 
 ## Estructura
 
