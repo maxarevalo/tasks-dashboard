@@ -1,7 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import {
   addMonths,
   currentPeriod,
@@ -37,8 +42,18 @@ export function MatrixNav({
       <button
         type="button"
         onClick={() => go(addMonths(from, -WINDOW))}
-        className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+        className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
         aria-label="10 meses antes"
+        title="10 meses antes"
+      >
+        <ChevronsLeft className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => go(addMonths(from, -1))}
+        className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+        aria-label="Un mes antes"
+        title="Un mes antes"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
@@ -49,11 +64,21 @@ export function MatrixNav({
 
       <button
         type="button"
-        onClick={() => go(addMonths(from, WINDOW))}
+        onClick={() => go(addMonths(from, 1))}
         className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-        aria-label="10 meses después"
+        aria-label="Un mes después"
+        title="Un mes después"
       >
         <ChevronRight className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => go(addMonths(from, WINDOW))}
+        className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
+        aria-label="10 meses después"
+        title="10 meses después"
+      >
+        <ChevronsRight className="h-4 w-4" />
       </button>
 
       {!atCurrent && (

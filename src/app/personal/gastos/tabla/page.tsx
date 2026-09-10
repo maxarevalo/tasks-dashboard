@@ -42,7 +42,7 @@ export default async function TablaGastosPage({
 
       <PageHeader
         title="Tabla mensual"
-        description="Todos los gastos, un mes por columna. Recorré de a 10 meses."
+        description="Todos los gastos, un mes por columna. 10 meses a la vez; ‹ › avanza de a un mes."
         icon={Table2}
       />
 
