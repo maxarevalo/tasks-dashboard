@@ -422,6 +422,113 @@ export async function deleteExpense(
   });
 }
 
+const norm = (s: string) => s.trim().toLowerCase();
+
+/** true si ya hay un gasto "equivalente" en esa lista (misma descripción+tarjeta). */
+function hasEquivalent(
+  candidates: { description: unknown; cardId: unknown }[],
+  description: string,
+  cardId: unknown,
+): boolean {
+  const targetCard = cardId ? String(cardId) : "";
+  return candidates.some(
+    (c) =>
+      norm(String(c.description)) === norm(description) &&
+      (c.cardId ? String(c.cardId) : "") === targetCard,
+  );
+}
+
+/** Copia un gasto puntual al mes siguiente (si no hay ya uno equivalente ahí). */
+export async function replicateExpense(id: string): Promise<ActionResult> {
+  return run(async (uid) => {
+    const doc = await Expense.findOne({ _id: id, userId: uid }).lean();
+    if (!doc) throw new Error("No se encontró el gasto.");
+    if (doc.source === "installment") {
+      throw new Error("Las cuotas ya están distribuidas mes a mes: no se replican a mano.");
+    }
+    const nextPeriod = addMonths(String(doc.period), 1);
+    const candidates = await Expense.find({
+      userId: uid,
+      period: nextPeriod,
+      category: doc.category,
+      currency: doc.currency,
+    })
+      .select("description cardId")
+      .lean();
+    if (hasEquivalent(candidates, String(doc.description), doc.cardId)) {
+      return; // ya estaba: no duplicar
+    }
+    await Expense.create({
+      userId: uid,
+      period: nextPeriod,
+      category: doc.category,
+      description: doc.description,
+      amount: doc.amount,
+      currency: doc.currency,
+      cardId: doc.cardId ?? undefined,
+      source: "manual",
+      paid: false,
+    });
+  });
+}
+
+/** Copia todos los gastos (no cuotas) de `period` al mes siguiente. */
+export async function replicateAllToNextMonth(
+  targetPeriod: string,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const p = period.parse(targetPeriod);
+    const nextPeriod = addMonths(p, 1);
+
+    const rows = await Expense.find({
+      userId: uid,
+      period: p,
+      source: { $ne: "installment" },
+    }).lean();
+    if (rows.length === 0) {
+      throw new Error("No hay gastos para replicar en este mes.");
+    }
+
+    const existing = await Expense.find({ userId: uid, period: nextPeriod })
+      .select("category description currency cardId")
+      .lean();
+    const existingByKey = new Map<
+      string,
+      { description: unknown; cardId: unknown }[]
+    >();
+    for (const e of existing) {
+      const key = `${e.category}|${e.currency}`;
+      existingByKey.set(key, [...(existingByKey.get(key) ?? []), e]);
+    }
+
+    const toInsert = rows
+      .filter((r) => {
+        const key = `${r.category}|${r.currency}`;
+        return !hasEquivalent(
+          existingByKey.get(key) ?? [],
+          String(r.description),
+          r.cardId,
+        );
+      })
+      .map((r) => ({
+        userId: uid,
+        period: nextPeriod,
+        category: r.category,
+        description: r.description,
+        amount: r.amount,
+        currency: r.currency,
+        cardId: r.cardId ?? undefined,
+        source: "manual" as const,
+        paid: false,
+      }));
+
+    if (toInsert.length === 0) {
+      throw new Error("Todos los gastos de este mes ya están replicados.");
+    }
+    await Expense.insertMany(toInsert);
+  });
+}
+
 /* -------------------------------- Cards -------------------------------- */
 
 export async function createCard(
@@ -538,21 +645,35 @@ export async function generateFixedForPeriod(
     if (onlyAuto) templateFilter.autoGenerate = true;
     const templates = await FixedExpense.find(templateFilter).lean();
 
-    const existing = await Expense.find({
-      userId: uid,
-      period: p,
-      fixedId: { $exists: true },
-    })
-      .select("fixedId")
+    const existing = await Expense.find({ userId: uid, period: p })
+      .select("fixedId category description currency cardId")
       .lean();
-    const done = new Set(existing.map((e) => String(e.fixedId)));
+    const done = new Set(
+      existing.filter((e) => e.fixedId).map((e) => String(e.fixedId)),
+    );
+    const existingByKey = new Map<
+      string,
+      { description: unknown; cardId: unknown }[]
+    >();
+    for (const e of existing) {
+      const key = `${e.category}|${e.currency}`;
+      existingByKey.set(key, [...(existingByKey.get(key) ?? []), e]);
+    }
 
     const rows = templates
       .filter((t) => {
         const end = (t.endPeriod as string) ?? null;
         const skipped =
           Array.isArray(t.skipPeriods) && t.skipPeriods.includes(p);
-        return (!end || p <= end) && !skipped && !done.has(String(t._id));
+        if (end && p > end) return false;
+        if (skipped || done.has(String(t._id))) return false;
+        // Ya hay un gasto con la misma descripción/tarjeta (ej. replicado a mano).
+        const key = `${(t.category as string) ?? "fijo"}|${t.currency}`;
+        return !hasEquivalent(
+          existingByKey.get(key) ?? [],
+          String(t.description),
+          t.cardId,
+        );
       })
       .map((t) => ({
         userId: uid,

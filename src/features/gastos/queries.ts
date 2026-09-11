@@ -43,6 +43,7 @@ function mapExpense(
   doc: Lean,
   cardName: string | null,
   fixedStatus: ExpenseDTO["fixedStatus"] = null,
+  replicatedNextMonth = false,
 ): ExpenseDTO {
   const inst = doc.installment as
     | { current?: number; total?: number }
@@ -67,7 +68,20 @@ function mapExpense(
     fixedId: doc.fixedId ? str(doc.fixedId) : null,
     overridden: Boolean(doc.overridden),
     fixedStatus,
+    replicatedNextMonth,
   };
+}
+
+/** Firma para "es el mismo gasto" al replicar/detectar duplicados entre meses. */
+function expenseSignature(
+  category: unknown,
+  description: unknown,
+  currency: unknown,
+  cardId: unknown,
+): string {
+  const desc = String(description ?? "").trim().toLowerCase();
+  const card = cardId ? String(cardId) : "";
+  return `${category}|${desc}|${currency}|${card}`;
 }
 
 function mapFixed(doc: Lean, cardName: string | null): FixedExpenseDTO {
@@ -331,14 +345,22 @@ export async function getMonthData(period: Period): Promise<MonthData> {
 
   const nextPeriod = addMonths(period, 1);
 
-  const [expenseDocs, cards, fixedDocs] = await Promise.all([
+  const [expenseDocs, cards, fixedDocs, nextExpenseDocs] = await Promise.all([
     Expense.find({ userId: uid, period }).sort({ createdAt: 1 }).lean(),
     getCards(true),
     FixedExpense.find({ userId: uid }).lean(),
+    Expense.find({ userId: uid, period: nextPeriod, source: { $ne: "installment" } })
+      .select("category description currency cardId")
+      .lean(),
   ]);
 
   const cardName = new Map(cards.map((c) => [c.id, c.name]));
   const fixedById = new Map(fixedDocs.map((f) => [String(f._id), f]));
+  const nextMonthSignatures = new Set(
+    nextExpenseDocs.map((e) =>
+      expenseSignature(e.category, e.description, e.currency, e.cardId),
+    ),
+  );
 
   function fixedStatusFor(fixedId: string | null): ExpenseDTO["fixedStatus"] {
     if (!fixedId) return null;
@@ -359,11 +381,22 @@ export async function getMonthData(period: Period): Promise<MonthData> {
       d as Lean,
       d.cardId ? (cardName.get(String(d.cardId)) ?? null) : null,
       d.source === "fixed" ? fixedStatusFor(d.fixedId ? String(d.fixedId) : null) : null,
+      d.source !== "installment" &&
+        nextMonthSignatures.has(
+          expenseSignature(d.category, d.description, d.currency, d.cardId),
+        ),
     ),
   );
 
   const materializedFixedIds = new Set(
     expenses.filter((e) => e.fixedId).map((e) => e.fixedId as string),
+  );
+  // Gastos ya cargados este mes (por ej. replicados a mano) que "satisfacen"
+  // una plantilla aunque no tengan el fixedId enlazado.
+  const thisMonthSignatures = new Set(
+    expenses.map((e) =>
+      expenseSignature(e.category, e.description, e.currency, e.cardId),
+    ),
   );
   const pending = fixedDocs.filter(
     (f) =>
@@ -374,7 +407,15 @@ export async function getMonthData(period: Period): Promise<MonthData> {
         (f.endPeriod as string) ?? null,
       ) &&
       !(Array.isArray(f.skipPeriods) && f.skipPeriods.includes(period)) &&
-      !materializedFixedIds.has(String(f._id)),
+      !materializedFixedIds.has(String(f._id)) &&
+      !thisMonthSignatures.has(
+        expenseSignature(
+          (f.category as string) ?? "fijo",
+          f.description,
+          f.currency,
+          f.cardId,
+        ),
+      ),
   );
 
   const notContinuingNextMonth = expenses

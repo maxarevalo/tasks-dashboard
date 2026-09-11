@@ -56,6 +56,12 @@ activo), `src/features/profiles/actions.ts`.
     alcanzada, pausado o plantilla borrada), la fila muestra un badge y el mes
     un banner.
 - Marcar pagado / pendiente por gasto.
+- **Replicar al mes siguiente**: desde el menú (…) de cualquier gasto (no
+  cuotas), "Replicar al mes siguiente" copia ese gasto puntual al mes que
+  viene (no duplica si ya hay uno con la misma descripción/tarjeta ahí). Si el
+  gasto ya está replicado, la fila muestra el tag **"Replicado en próx. mes"**.
+  También hay un botón **"Replicar mes siguiente"** que copia de una todos los
+  gastos del mes que todavía no tengan su réplica.
 - **Tabla mensual** (`/personal/gastos/tabla`): matriz con un mes por columna
   (ventanas de 10 meses, navegables ‹/›), filas agrupadas por categoría,
   subtotales por categoría y total por mes. Toggle ARS/USD. Los gastos fijos

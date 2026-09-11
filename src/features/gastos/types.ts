@@ -37,6 +37,8 @@ export type ExpenseDTO = {
    * - "orphan": la plantilla ya no existe.
    */
   fixedStatus: "continues" | "ends" | "orphan" | null;
+  /** Ya existe un gasto equivalente (misma categoría/descripción/tarjeta) el mes que viene. */
+  replicatedNextMonth: boolean;
 };
 
 export type FixedExpenseDTO = {

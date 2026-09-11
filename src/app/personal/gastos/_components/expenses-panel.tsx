@@ -11,6 +11,8 @@ import {
   CalendarX,
   CircleSlash,
   ClipboardPaste,
+  CopyPlus,
+  CopyCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { RowMenu, type RowMenuItem } from "@/components/row-menu";
@@ -20,6 +22,8 @@ import {
   setExpensePaid,
   deleteExpense,
   skipFixedForPeriod,
+  replicateExpense,
+  replicateAllToNextMonth,
 } from "@/features/gastos/actions";
 import {
   CATEGORY_LABELS,
@@ -28,7 +32,7 @@ import {
   type ExpenseDTO,
   type FixedExpenseDTO,
 } from "@/features/gastos/types";
-import type { Period } from "@/lib/period";
+import { periodLabel, addMonths, type Period } from "@/lib/period";
 import { ExpenseForm } from "./expense-form";
 import { FixedForm } from "./fixed-form";
 import { BulkImport } from "./bulk-import";
@@ -48,6 +52,7 @@ export function ExpensesPanel({
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
   const [fixedEditing, setFixedEditing] = useState<FixedExpenseDTO | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const { pending: replicatingAll, exec: execReplicateAll } = useAction();
 
   const openNew = () => {
     setEditing(null);
@@ -59,11 +64,37 @@ export function ExpensesPanel({
     items: expenses.filter((e) => e.category === cat),
   })).filter((g) => g.items.length > 0);
 
+  const replicableCount = expenses.filter(
+    (e) => e.source !== "installment" && !e.replicatedNextMonth,
+  ).length;
+
+  function replicateAll() {
+    const nextLabel = periodLabel(addMonths(period, 1));
+    if (
+      !confirm(
+        `¿Replicar ${replicableCount} gasto${replicableCount === 1 ? "" : "s"} de este mes a ${nextLabel}? Los que ya estén ahí no se duplican.`,
+      )
+    ) {
+      return;
+    }
+    execReplicateAll(() => replicateAllToNextMonth(period));
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900">Detalle</h3>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {replicableCount > 0 && (
+            <Button
+              variant="secondary"
+              disabled={replicatingAll}
+              onClick={replicateAll}
+            >
+              <CopyPlus className="h-4 w-4" />
+              Replicar mes siguiente
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => setBulkOpen(true)}>
             <ClipboardPaste className="h-4 w-4" />
             Importar
@@ -145,9 +176,20 @@ function ExpenseRow({
 }) {
   const { pending, exec } = useAction();
   const isFixed = e.source === "fixed";
+  const canReplicate = e.source !== "installment" && !e.replicatedNextMonth;
 
   const del = (scope: "one" | "group-future" | "group-all") =>
     exec(() => deleteExpense(e.id, scope));
+
+  const replicateItem: RowMenuItem[] = canReplicate
+    ? [
+        {
+          label: "Replicar al mes siguiente",
+          icon: <CopyPlus className="h-3.5 w-3.5" />,
+          onClick: () => exec(() => replicateExpense(e.id)),
+        },
+      ]
+    : [];
 
   const menuItems: RowMenuItem[] = isFixed
     ? [
@@ -161,6 +203,7 @@ function ExpenseRow({
           icon: <Pencil className="h-3.5 w-3.5" />,
           onClick: onEdit,
         },
+        ...replicateItem,
         {
           label: "Quitar de este mes",
           icon: <CircleSlash className="h-3.5 w-3.5" />,
@@ -174,6 +217,7 @@ function ExpenseRow({
           icon: <Pencil className="h-3.5 w-3.5" />,
           onClick: onEdit,
         },
+        ...replicateItem,
         {
           label: e.groupId ? "Borrar esta cuota" : "Borrar",
           icon: <Trash2 className="h-3.5 w-3.5" />,
@@ -250,6 +294,12 @@ function ExpenseRow({
             <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
               <CalendarX className="h-3 w-3" />
               Plantilla eliminada
+            </span>
+          )}
+          {e.replicatedNextMonth && (
+            <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+              <CopyCheck className="h-3 w-3" />
+              Replicado en próx. mes
             </span>
           )}
         </div>
