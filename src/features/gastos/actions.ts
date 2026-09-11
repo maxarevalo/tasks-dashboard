@@ -12,7 +12,9 @@ import {
   currentPeriod as currentPeriodValue,
   isValidPeriod,
   periodMatchesCadence,
+  type RecurrenceFrequency,
 } from "@/lib/period";
+import { EXPENSE_TAGS } from "@/lib/tags";
 import type { ActionResult, DupStatus } from "./types";
 
 const GASTOS_PATH = "/personal/gastos";
@@ -61,6 +63,11 @@ const objectId = z
   .regex(/^[a-f\d]{24}$/i, "Id inválido")
   .optional()
   .or(z.literal("").transform(() => undefined));
+// Etiqueta libre y opcional (ver EXPENSE_TAGS en src/lib/tags.ts).
+const tag = z
+  .enum(EXPENSE_TAGS)
+  .optional()
+  .or(z.literal("").transform(() => undefined));
 
 const expenseInput = z.object({
   period,
@@ -71,6 +78,7 @@ const expenseInput = z.object({
   cardId: objectId,
   note: z.string().trim().optional(),
   paid: z.boolean().optional(),
+  tag,
 });
 
 const bulkExpenseInput = z.object({
@@ -81,6 +89,7 @@ const bulkExpenseInput = z.object({
   currency,
   cardId: objectId,
   paid: z.boolean().optional(),
+  tag,
 });
 
 const installmentInput = z.object({
@@ -92,6 +101,7 @@ const installmentInput = z.object({
   startPeriod: period,
   current: z.coerce.number().int().min(1, "Cuota inicial inválida."),
   total: z.coerce.number().int().min(1).max(120, "Máximo 120 cuotas."),
+  tag,
 });
 
 const dayOfMonth = z.coerce.number().int().min(1).max(31).optional();
@@ -112,9 +122,11 @@ const fixedInput = z.object({
   startPeriod: period,
   endPeriod: period.optional().or(z.literal("").transform(() => undefined)),
   active: z.boolean().optional(),
-  /** "monthly" (default) o "annual": una vez por año, en el mes de startPeriod. */
-  frequency: z.enum(["monthly", "annual"]).default("monthly"),
+  /** "monthly" (default), "semiannual" (cada 6 meses) o "annual" (cada 12),
+   * anclado al mes de startPeriod. */
+  frequency: z.enum(["monthly", "semiannual", "annual"]).default("monthly"),
   autoGenerate: z.boolean().optional(),
+  tag,
 });
 
 const createFixedInput = fixedInput.extend({
@@ -124,13 +136,13 @@ const createFixedInput = fixedInput.extend({
 
 /** Meses hacia adelante que se materializan de una para gastos automáticos. */
 const AUTO_FIXED_HORIZON_MONTHLY = 24;
-/** Los anuales se proyectan más lejos para que se vean varias ocurrencias. */
-const AUTO_FIXED_HORIZON_ANNUAL = 60;
+/** Los no mensuales se proyectan más lejos para que se vean varias ocurrencias. */
+const AUTO_FIXED_HORIZON_LONG = 60;
 
-function autoFixedHorizon(frequency: "monthly" | "annual"): number {
-  return frequency === "annual"
-    ? AUTO_FIXED_HORIZON_ANNUAL
-    : AUTO_FIXED_HORIZON_MONTHLY;
+function autoFixedHorizon(frequency: RecurrenceFrequency): number {
+  return frequency === "monthly"
+    ? AUTO_FIXED_HORIZON_MONTHLY
+    : AUTO_FIXED_HORIZON_LONG;
 }
 
 type FixedTemplateLike = {
@@ -143,7 +155,8 @@ type FixedTemplateLike = {
   startPeriod: string;
   endPeriod?: string | null;
   skipPeriods?: string[];
-  frequency?: "monthly" | "annual";
+  frequency?: RecurrenceFrequency;
+  tag?: string | null;
 };
 
 /**
@@ -182,6 +195,7 @@ async function materializeFixedRange(
     amount: template.amount,
     currency: template.currency,
     cardId: template.cardId ?? undefined,
+    tag: template.tag ?? null,
   };
 
   const existing = await Expense.find({
@@ -236,6 +250,7 @@ export async function createExpense(
       userId: uid,
       ...data,
       cardId: data.category === "tarjeta" ? data.cardId : undefined,
+      tag: data.tag ?? null,
       source: "manual",
       paidAt: data.paid ? new Date() : undefined,
     });
@@ -262,6 +277,7 @@ export async function createExpensesBulk(
         amount: data.amount,
         currency: data.currency,
         cardId: data.category === "tarjeta" ? data.cardId : undefined,
+        tag: data.tag ?? null,
         source: "manual" as const,
         paid: data.paid ?? false,
         paidAt: data.paid ? new Date() : undefined,
@@ -335,6 +351,7 @@ export async function createInstallmentPurchase(
       amount: data.amountPerInstallment,
       currency: data.currency,
       cardId: data.category === "tarjeta" ? data.cardId : undefined,
+      tag: data.tag ?? null,
       source: "installment" as const,
       groupId,
       installment: { current: data.current + k, total: data.total },
@@ -360,7 +377,7 @@ export async function updateExpense(
         : {};
     await Expense.updateOne(
       { _id: id, userId: uid },
-      { $set: { ...data, ...extra } },
+      { $set: { ...data, tag: data.tag ?? null, ...extra } },
     );
   });
 }
@@ -485,6 +502,7 @@ export async function replicateExpense(id: string): Promise<ActionResult> {
       amount: doc.amount,
       currency: doc.currency,
       cardId: doc.cardId ?? undefined,
+      tag: doc.tag ?? null,
       source: "manual",
       paid: false,
     });
@@ -545,6 +563,7 @@ export async function replicateSelected(
           amount: d.amount,
           currency: d.currency,
           cardId: d.cardId ?? undefined,
+          tag: d.tag ?? null,
           source: "manual",
           paid: false,
         });
@@ -616,7 +635,11 @@ export async function updateFixedExpense(
     const { applyFrom, ...data } = createFixedInput.parse(input);
 
     const update: Record<string, unknown> = {
-      $set: { ...data, endPeriod: data.endPeriod ?? null },
+      $set: {
+        ...data,
+        endPeriod: data.endPeriod ?? null,
+        tag: data.tag ?? null,
+      },
     };
     if (applyFrom) {
       // Re-afirmar la vigencia desde `applyFrom`: destildar los meses salteados
@@ -638,7 +661,7 @@ export async function updateFixedExpense(
           addMonths(
             applyFrom,
             autoFixedHorizon(
-              ((doc as { frequency?: "monthly" | "annual" }).frequency) ??
+              ((doc as { frequency?: RecurrenceFrequency }).frequency) ??
                 "monthly",
             ),
           ),
@@ -702,7 +725,7 @@ export async function generateFixedForPeriod(
           Array.isArray(t.skipPeriods) && t.skipPeriods.includes(p);
         if (end && p > end) return false;
         if (skipped || done.has(String(t._id))) return false;
-        const freq = (t.frequency as "monthly" | "annual") ?? "monthly";
+        const freq = (t.frequency as RecurrenceFrequency) ?? "monthly";
         if (!periodMatchesCadence(String(t.startPeriod), p, freq)) return false;
         // Ya hay un gasto con la misma descripción/tarjeta (ej. replicado a mano).
         const key = `${(t.category as string) ?? "fijo"}|${t.currency}`;

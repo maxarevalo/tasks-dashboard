@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Modal } from "@/components/modal";
 import { Field, Input, Select, Button, ErrorText } from "@/components/ui";
-import { currentPeriod, periodLabel, type Period } from "@/lib/period";
+import { addMonths, currentPeriod, periodLabel, type Period } from "@/lib/period";
+import { EXPENSE_TAGS, EXPENSE_TAG_ICONS } from "@/lib/tags";
 import { useAction } from "@/features/gastos/use-action";
 import {
   createFixedExpense,
@@ -13,6 +14,7 @@ import type {
   CardDTO,
   FixedExpenseDTO,
   FixedFrequency,
+  ExpenseTag,
 } from "@/features/gastos/types";
 
 const monthName = (p: Period) => {
@@ -45,6 +47,7 @@ export function FixedForm({
   const [startPeriod, setStartPeriod] = useState(currentPeriod());
   const [endPeriod, setEndPeriod] = useState("");
   const [frequency, setFrequency] = useState<FixedFrequency>("monthly");
+  const [tag, setTag] = useState<ExpenseTag | "">("");
   const [autoGenerate, setAutoGenerate] = useState(true);
   const [applyFrom, setApplyFrom] = useState(currentPeriod());
 
@@ -61,6 +64,7 @@ export function FixedForm({
     setStartPeriod(editing?.startPeriod ?? currentPeriod());
     setEndPeriod(editing?.endPeriod ?? "");
     setFrequency(editing?.frequency ?? "monthly");
+    setTag(editing?.tag ?? "");
     setAutoGenerate(editing ? editing.autoGenerate : true);
     setApplyFrom(effectiveFrom ?? currentPeriod());
   } else if (!open && syncedFor !== null) {
@@ -79,6 +83,7 @@ export function FixedForm({
       endPeriod: endPeriod || "",
       frequency,
       autoGenerate,
+      tag,
     };
 
     if (editing) {
@@ -177,15 +182,31 @@ export function FixedForm({
           )}
         </div>
 
-        <Field label="Frecuencia">
-          <Select
-            value={frequency}
-            onChange={(e) => setFrequency(e.target.value as FixedFrequency)}
-          >
-            <option value="monthly">Mensual</option>
-            <option value="annual">Anual</option>
-          </Select>
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Frecuencia">
+            <Select
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value as FixedFrequency)}
+            >
+              <option value="monthly">Mensual</option>
+              <option value="semiannual">Semestral</option>
+              <option value="annual">Anual</option>
+            </Select>
+          </Field>
+          <Field label="Etiqueta" hint="Opcional">
+            <Select
+              value={tag}
+              onChange={(e) => setTag(e.target.value as ExpenseTag | "")}
+            >
+              <option value="">Sin etiqueta</option>
+              {EXPENSE_TAGS.map((t) => (
+                <option key={t} value={t}>
+                  {EXPENSE_TAG_ICONS[t]} {t}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Desde">
@@ -214,6 +235,15 @@ export function FixedForm({
           </p>
         )}
 
+        {frequency === "semiannual" && (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            Se va a cargar cada 6 meses: en {monthName(startPeriod)} y en{" "}
+            {monthName(addMonths(startPeriod, 6))}
+            {endPeriod ? ` (hasta ${endPeriod})` : ""}. El resto de los meses
+            no aparece.
+          </p>
+        )}
+
         <label className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
           <input
             type="checkbox"
@@ -225,7 +255,7 @@ export function FixedForm({
             Cargarlo automáticamente en el mes actual y en todos los siguientes.
             <span className="block text-xs text-slate-400">
               Si lo destildás, queda como plantilla y lo cargás a mano cada mes
-              {frequency === "annual" ? " en que corresponda" : ""}.
+              {frequency !== "monthly" ? " en que corresponda" : ""}.
             </span>
           </span>
         </label>

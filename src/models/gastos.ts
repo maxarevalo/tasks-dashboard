@@ -1,4 +1,6 @@
 import { Schema, model, models, type InferSchemaType } from "mongoose";
+import { RECURRENCE_FREQUENCIES, type RecurrenceFrequency } from "@/lib/period";
+import { EXPENSE_TAGS } from "@/lib/tags";
 
 export const OWNER_ID = "owner";
 
@@ -10,8 +12,12 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
-export const FIXED_FREQUENCIES = ["monthly", "annual"] as const;
-export type FixedFrequency = (typeof FIXED_FREQUENCIES)[number];
+export { EXPENSE_TAGS, EXPENSE_TAG_ICONS } from "@/lib/tags";
+export type { ExpenseTag } from "@/lib/tags";
+
+// "monthly" | "semiannual" | "annual" (ver src/lib/period.ts).
+export const FIXED_FREQUENCIES = RECURRENCE_FREQUENCIES;
+export type FixedFrequency = RecurrenceFrequency;
 
 const CURRENCY_ENUM = ["ARS", "USD"] as const;
 
@@ -56,6 +62,9 @@ const fixedExpenseSchema = new Schema(
     autoGenerate: { type: Boolean, default: false },
     // Meses (YYYY-MM) en los que este fijo fue quitado a mano.
     skipPeriods: { type: [String], default: [] },
+    // Etiqueta libre opcional (ver EXPENSE_TAGS en src/lib/tags.ts). Se
+    // propaga a los gastos materializados de esta plantilla.
+    tag: { type: String, enum: [...EXPENSE_TAGS, null], default: null },
   },
   { timestamps: true },
 );
@@ -95,6 +104,8 @@ const expenseSchema = new Schema(
     // true si la fila (materializada de un fijo) fue editada a mano: no se
     // pisa al propagar cambios de la plantilla.
     overridden: { type: Boolean, default: false },
+    // Etiqueta libre opcional (ver EXPENSE_TAGS en este mismo archivo).
+    tag: { type: String, enum: [...EXPENSE_TAGS, null], default: null },
   },
   { timestamps: true },
 );

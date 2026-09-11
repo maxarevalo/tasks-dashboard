@@ -1,9 +1,17 @@
 import type { Currency } from "@/lib/money";
-import type { Period } from "@/lib/period";
+import type { Period, RecurrenceFrequency } from "@/lib/period";
 import type { Availability, ReturnMode } from "@/models/contable";
 import type { DollarType, RateBasis } from "@/lib/exchange";
 
-export type { Currency, Period, Availability, ReturnMode, DollarType, RateBasis };
+export type {
+  Currency,
+  Period,
+  Availability,
+  ReturnMode,
+  DollarType,
+  RateBasis,
+  RecurrenceFrequency,
+};
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -41,6 +49,11 @@ export type IncomeDTO = {
   period: Period | null;
   startPeriod: Period | null;
   endPeriod: Period | null;
+  /**
+   * Solo para kind="recurring": "monthly" (default), "semiannual" (cada 6
+   * meses desde startPeriod, ej. aguinaldo: junio y diciembre) o "annual".
+   */
+  frequency: RecurrenceFrequency;
   confirmed: boolean;
   active: boolean;
 };

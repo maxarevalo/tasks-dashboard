@@ -4,6 +4,7 @@ import { SavingsAccount, Income, ExchangeRate } from "@/models/contable";
 import { getActiveProfileKey } from "@/lib/profile";
 import {
   currentPeriod,
+  periodMatchesCadence,
   periodRange,
   type Period,
 } from "@/lib/period";
@@ -61,6 +62,7 @@ function mapIncome(doc: Lean): IncomeDTO {
     period: (doc.period as string) ?? null,
     startPeriod: (doc.startPeriod as string) ?? null,
     endPeriod: (doc.endPeriod as string) ?? null,
+    frequency: (doc.frequency as IncomeDTO["frequency"]) ?? "monthly",
     confirmed: doc.confirmed !== false,
     active: doc.active !== false,
   };
@@ -100,8 +102,8 @@ function incomeForMonth(
       if (inc.period === period) total += inc.amount;
     } else if (
       inc.startPeriod &&
-      period >= inc.startPeriod &&
-      (!inc.endPeriod || period <= inc.endPeriod)
+      (!inc.endPeriod || period <= inc.endPeriod) &&
+      periodMatchesCadence(inc.startPeriod, period, inc.frequency)
     ) {
       total += inc.amount;
     }

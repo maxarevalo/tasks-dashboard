@@ -1,8 +1,9 @@
 import type { Currency } from "@/lib/money";
 import type { ExpenseCategory, FixedFrequency } from "@/models/gastos";
 import type { Period } from "@/lib/period";
+import type { ExpenseTag } from "@/lib/tags";
 
-export type { Currency, ExpenseCategory, Period, FixedFrequency };
+export type { Currency, ExpenseCategory, Period, FixedFrequency, ExpenseTag };
 
 export type CardDTO = {
   id: string;
@@ -39,6 +40,8 @@ export type ExpenseDTO = {
   fixedStatus: "continues" | "ends" | "orphan" | null;
   /** Ya existe un gasto equivalente (misma categoría/descripción/tarjeta) el mes que viene. */
   replicatedNextMonth: boolean;
+  /** Etiqueta libre opcional (ver EXPENSE_TAGS en src/lib/tags.ts). */
+  tag: ExpenseTag | null;
 };
 
 export type FixedExpenseDTO = {
@@ -56,6 +59,8 @@ export type FixedExpenseDTO = {
   frequency: FixedFrequency;
   autoGenerate: boolean;
   skipPeriods: Period[];
+  /** Etiqueta libre opcional (ver EXPENSE_TAGS en src/lib/tags.ts). */
+  tag: ExpenseTag | null;
 };
 
 export type CategoryTotals = Record<

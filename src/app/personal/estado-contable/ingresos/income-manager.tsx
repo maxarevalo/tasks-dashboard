@@ -5,7 +5,7 @@ import { Plus, Pencil, Trash2, Power } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { Field, Input, Select, Button, ErrorText } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
-import { currentPeriod, periodShortLabel } from "@/lib/period";
+import { addMonths, currentPeriod, periodShortLabel } from "@/lib/period";
 import { useAction } from "@/features/contable/use-action";
 import {
   createIncome,
@@ -13,7 +13,20 @@ import {
   setIncomeActive,
   deleteIncome,
 } from "@/features/contable/actions";
-import type { IncomeDTO } from "@/features/contable/types";
+import type { IncomeDTO, RecurrenceFrequency } from "@/features/contable/types";
+
+const FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
+  monthly: "mensual",
+  semiannual: "cada 6 meses",
+  annual: "anual",
+};
+
+const monthName = (p: string) => {
+  const [y, m] = p.split("-").map(Number);
+  return new Intl.DateTimeFormat("es-AR", { month: "long" }).format(
+    new Date(y, m - 1, 1),
+  );
+};
 
 const ORIGIN_SUGGESTIONS = [
   "Sueldo",
@@ -78,7 +91,9 @@ export function IncomeManager({ incomes }: { incomes: IncomeDTO[] }) {
                   <p className="text-xs text-slate-500">
                     {formatMoney(inc.amount, inc.currency)} {inc.currency} ·{" "}
                     {inc.kind === "recurring"
-                      ? `mensual desde ${periodShortLabel(inc.startPeriod ?? currentPeriod())}${
+                      ? `${FREQUENCY_LABELS[inc.frequency]} desde ${periodShortLabel(
+                          inc.startPeriod ?? currentPeriod(),
+                        )}${
                           inc.endPeriod
                             ? ` hasta ${periodShortLabel(inc.endPeriod)}`
                             : ""
@@ -162,6 +177,7 @@ function IncomeForm({
   const [period, setPeriod] = useState(currentPeriod());
   const [startPeriod, setStartPeriod] = useState(currentPeriod());
   const [endPeriod, setEndPeriod] = useState("");
+  const [frequency, setFrequency] = useState<RecurrenceFrequency>("monthly");
   const [confirmed, setConfirmed] = useState(true);
 
   const [syncedFor, setSyncedFor] = useState<string | null>(null);
@@ -177,6 +193,7 @@ function IncomeForm({
     setPeriod(editing?.period || currentPeriod());
     setStartPeriod(editing?.startPeriod || currentPeriod());
     setEndPeriod(editing?.endPeriod ?? "");
+    setFrequency(editing?.frequency ?? "monthly");
     setConfirmed(editing?.confirmed ?? true);
   } else if (!open && syncedFor !== null) {
     setSyncedFor(null);
@@ -195,6 +212,7 @@ function IncomeForm({
           period: kind === "oneoff" ? period : "",
           startPeriod: kind === "recurring" ? startPeriod : "",
           endPeriod: kind === "recurring" ? endPeriod : "",
+          frequency,
           confirmed,
           active: editing?.active ?? true,
         };
@@ -275,24 +293,55 @@ function IncomeForm({
             />
           </Field>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Desde">
-              <Input
-                type="month"
-                value={startPeriod}
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Desde">
+                <Input
+                  type="month"
+                  value={startPeriod}
+                  onChange={(e) =>
+                    setStartPeriod(e.target.value || currentPeriod())
+                  }
+                />
+              </Field>
+              <Field label="Hasta" hint="Vacío = indefinido">
+                <Input
+                  type="month"
+                  value={endPeriod}
+                  onChange={(e) => setEndPeriod(e.target.value)}
+                />
+              </Field>
+            </div>
+
+            <Field label="Frecuencia">
+              <Select
+                value={frequency}
                 onChange={(e) =>
-                  setStartPeriod(e.target.value || currentPeriod())
+                  setFrequency(e.target.value as RecurrenceFrequency)
                 }
-              />
+              >
+                <option value="monthly">Mensual</option>
+                <option value="semiannual">Semestral (ej. aguinaldo)</option>
+                <option value="annual">Anual</option>
+              </Select>
             </Field>
-            <Field label="Hasta" hint="Vacío = indefinido">
-              <Input
-                type="month"
-                value={endPeriod}
-                onChange={(e) => setEndPeriod(e.target.value)}
-              />
-            </Field>
-          </div>
+
+            {frequency === "semiannual" && (
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                Se cobra cada 6 meses: en {monthName(startPeriod)} y en{" "}
+                {monthName(addMonths(startPeriod, 6))}
+                {endPeriod ? ` (hasta ${endPeriod})` : ""}. Por ejemplo, para
+                el aguinaldo cargá el 50% del sueldo con inicio en junio.
+              </p>
+            )}
+
+            {frequency === "annual" && (
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                Se cobra una vez al año, en {monthName(startPeriod)}
+                {endPeriod ? ` (hasta ${endPeriod})` : ""}.
+              </p>
+            )}
+          </>
         )}
 
         <label className="flex items-center gap-2 text-sm text-slate-700">

@@ -13,7 +13,7 @@ import {
   RATE_BASIS,
 } from "@/models/contable";
 import { fetchDollar } from "@/lib/exchange";
-import { isValidPeriod } from "@/lib/period";
+import { isValidPeriod, RECURRENCE_FREQUENCIES } from "@/lib/period";
 import type { ActionResult } from "./types";
 
 const PATH = "/personal/estado-contable";
@@ -171,6 +171,9 @@ const incomeInput = z
     period: optionalPeriod,
     startPeriod: optionalPeriod,
     endPeriod: optionalPeriod,
+    /** Solo aplica a kind="recurring": "monthly" (default), "semiannual"
+     * (cada 6 meses, ej. aguinaldo) o "annual". */
+    frequency: z.enum(RECURRENCE_FREQUENCIES).default("monthly"),
     confirmed: z.boolean().optional(),
     active: z.boolean().optional(),
   })

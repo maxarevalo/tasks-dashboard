@@ -32,6 +32,7 @@ import {
   type FixedExpenseDTO,
 } from "@/features/gastos/types";
 import { periodLabel, addMonths, type Period } from "@/lib/period";
+import { EXPENSE_TAG_ICONS } from "@/lib/tags";
 import { ExpenseForm } from "./expense-form";
 import { FixedForm } from "./fixed-form";
 import { BulkImport } from "./bulk-import";
@@ -259,6 +260,7 @@ function ExpenseRow({
             e.paid ? "text-slate-400 line-through" : "text-slate-900"
           }`}
         >
+          {e.tag && <span title={e.tag}>{EXPENSE_TAG_ICONS[e.tag]} </span>}
           {e.description}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">

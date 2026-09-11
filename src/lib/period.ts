@@ -50,19 +50,36 @@ export function monthsBetween(a: Period, b: Period): number {
   return (by - ay) * 12 + (bm - am);
 }
 
+/** Frecuencias de recurrencia disponibles para gastos fijos e ingresos. */
+export const RECURRENCE_FREQUENCIES = [
+  "monthly",
+  "semiannual",
+  "annual",
+] as const;
+export type RecurrenceFrequency = (typeof RECURRENCE_FREQUENCIES)[number];
+
+const RECURRENCE_INTERVAL_MONTHS: Record<RecurrenceFrequency, number> = {
+  monthly: 1,
+  semiannual: 6,
+  annual: 12,
+};
+
 /**
  * true si `period` corresponde a una ocurrencia de una recurrencia que
- * empieza en `start`: todos los meses si es "monthly", o cada 12 meses
- * (mismo mes calendario que `start`) si es "annual".
+ * empieza en `start`, cada N meses según `frequency`:
+ * - "monthly": todos los meses.
+ * - "semiannual": cada 6 meses (ej. aguinaldo: arrancando en junio, cae en
+ *   junio y diciembre de cada año).
+ * - "annual": cada 12 meses, mismo mes calendario que `start`.
  */
 export function periodMatchesCadence(
   start: Period,
   period: Period,
-  frequency: "monthly" | "annual" = "monthly",
+  frequency: RecurrenceFrequency = "monthly",
 ): boolean {
   if (period < start) return false;
-  if (frequency === "annual") return monthsBetween(start, period) % 12 === 0;
-  return true;
+  const interval = RECURRENCE_INTERVAL_MONTHS[frequency];
+  return monthsBetween(start, period) % interval === 0;
 }
 
 export function periodLabel(period: Period): string {

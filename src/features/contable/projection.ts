@@ -1,4 +1,4 @@
-import { periodRange, type Period } from "@/lib/period";
+import { periodMatchesCadence, periodRange, type Period } from "@/lib/period";
 import { monthlyReturnRate } from "@/lib/rates";
 import type {
   SavingsAccountDTO,
@@ -20,7 +20,10 @@ function incomeForMonth(
       if (inc.period === period) total += inc.amount;
     } else {
       const start = inc.startPeriod ?? "0000-00";
-      if (period >= start && (!inc.endPeriod || period <= inc.endPeriod)) {
+      if (
+        (!inc.endPeriod || period <= inc.endPeriod) &&
+        periodMatchesCadence(start, period, inc.frequency)
+      ) {
         total += inc.amount;
       }
     }

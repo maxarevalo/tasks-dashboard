@@ -1,6 +1,7 @@
 import { Schema, model, models, type InferSchemaType } from "mongoose";
 import { OWNER_ID } from "./gastos";
 import { DOLLAR_TYPES, RATE_BASIS } from "@/lib/exchange";
+import { RECURRENCE_FREQUENCIES } from "@/lib/period";
 
 export { OWNER_ID };
 export { DOLLAR_TYPES, RATE_BASIS } from "@/lib/exchange";
@@ -81,6 +82,14 @@ const incomeSchema = new Schema(
     /** recurring: rango de vigencia. */
     startPeriod: { type: String },
     endPeriod: { type: String, default: null },
+    // "monthly" (default) se cobra todos los meses; "semiannual" cada 6
+    // meses desde startPeriod (ej. aguinaldo: junio y diciembre); "annual"
+    // solo en el mes de startPeriod, cada 12 meses.
+    frequency: {
+      type: String,
+      enum: RECURRENCE_FREQUENCIES,
+      default: "monthly",
+    },
     /** false = ingreso "posible" (no confirmado). */
     confirmed: { type: Boolean, default: true },
     active: { type: Boolean, default: true },

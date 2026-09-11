@@ -55,9 +55,15 @@ activo), `src/features/profiles/actions.ts`.
   - **Aviso de fin**: si un fijo no continúa el mes siguiente (fecha "hasta"
     alcanzada, pausado o plantilla borrada), la fila muestra un badge y el mes
     un banner.
-  - **Frecuencia mensual o anual**: un fijo anual se carga una sola vez al año,
-    en el mes de "Desde" (ej. seguro del auto, patente). Los automáticos se
-    proyectan 5 años hacia adelante en vez de 2.
+  - **Frecuencia mensual, semestral o anual**: un fijo semestral se carga cada
+    6 meses desde el mes de "Desde" (ej. seguro pagado dos veces al año) y uno
+    anual una sola vez al año (ej. patente). Los no mensuales se proyectan 5
+    años hacia adelante en vez de 2.
+- **Etiqueta por gasto** (opcional, con ícono): Supermercado, Obra,
+  Suscripciones, Combustible, Auto, Dardo, Farmacia, Salidas, Otros. Se elige
+  al cargar o editar cualquier gasto (suelto, en cuotas o fijo); en los fijos
+  se propaga automáticamente a cada mes materializado. Sin etiqueta por
+  defecto. Enum e íconos en `src/lib/tags.ts`.
 - Marcar pagado / pendiente por gasto.
 - **Replicar al mes siguiente**: desde el menú (…) de cualquier gasto (no
   cuotas), "Replicar al mes siguiente" copia ese gasto puntual al mes que
@@ -115,8 +121,11 @@ Cruza con Gastos para proyectar el saldo.
   **rendimiento** configurable por cuenta: TNA o TEA (capitalizan mes a mes),
   tasa mensual directa (sin capitalizar), o **saldos cargados a mano** por mes.
   Una cuenta por moneda se marca "acá cae el excedente del mes".
-- **Ingresos** (`/ingresos`): por **origen**, mensuales fijos o únicos,
-  "confirmados" o "posibles".
+- **Ingresos** (`/ingresos`): por **origen**, únicos o recurrentes con
+  **frecuencia mensual, semestral o anual**, "confirmados" o "posibles".
+  Un ingreso semestral (ej. **aguinaldo/SAC**) se carga una vez, con inicio en
+  el primer mes de cobro (ej. junio): se computa automáticamente también 6
+  meses después (diciembre) y así sucesivamente, sin duplicar la carga.
 - **Proyección**: horizonte 6/12/24 meses, por moneda. Cada mes muestra
   ingresos, gastos (materializados + fijos que van a caer), neto, rendimiento y
   **saldo acumulado**. Gráfico de línea + tabla, marca cuándo el saldo se
@@ -143,6 +152,7 @@ src/
     nav.ts                    Secciones y módulos  <- acá agregás módulos nuevos
     icons.ts                  Mapa nombre -> icono (lucide-react)
     period.ts / money.ts      Helpers de meses y moneda
+    tags.ts                   Etiquetas de gasto (enum + íconos, libre de mongoose)
   models/gastos.ts            Schemas Mongoose (Card, Expense, FixedExpense)
   features/gastos/            queries.ts (lectura), actions.ts (Server Actions), types.ts
   components/

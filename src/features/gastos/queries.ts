@@ -12,6 +12,7 @@ import {
   periodInRange,
   periodMatchesCadence,
   type Period,
+  type RecurrenceFrequency,
 } from "@/lib/period";
 import type { Currency } from "@/lib/money";
 import { convertAmount } from "@/lib/exchange";
@@ -75,6 +76,7 @@ function mapExpense(
     overridden: Boolean(doc.overridden),
     fixedStatus,
     replicatedNextMonth,
+    tag: (doc.tag as ExpenseDTO["tag"]) ?? null,
   };
 }
 
@@ -107,6 +109,7 @@ function mapFixed(doc: Lean, cardName: string | null): FixedExpenseDTO {
     skipPeriods: Array.isArray(doc.skipPeriods)
       ? (doc.skipPeriods as string[])
       : [],
+    tag: (doc.tag as FixedExpenseDTO["tag"]) ?? null,
   };
 }
 
@@ -189,7 +192,7 @@ export async function getProjectedExpenseTotals(
       const skips = Array.isArray(f.skipPeriods)
         ? (f.skipPeriods as string[])
         : [];
-      const freq = (f.frequency as "monthly" | "annual") ?? "monthly";
+      const freq = (f.frequency as RecurrenceFrequency) ?? "monthly";
       if (p < start || (end && p > end) || skips.includes(p)) continue;
       if (!periodMatchesCadence(start, p, freq)) continue;
       if (materialized.has(`${p}|${String(f._id)}`)) continue;
@@ -298,7 +301,7 @@ async function buildExpenseMatrixCore(
       (f.amount as number) ?? 0,
       (f.currency as Currency) ?? displayCurrency,
     );
-    const freq = (f.frequency as "monthly" | "annual") ?? "monthly";
+    const freq = (f.frequency as RecurrenceFrequency) ?? "monthly";
     for (const p of periods) {
       if (
         !periodInRange(p, String(f.startPeriod), (f.endPeriod as string) ?? null)
@@ -490,7 +493,7 @@ export async function getMonthData(period: Period): Promise<MonthData> {
       periodMatchesCadence(
         String(f.startPeriod),
         period,
-        (f.frequency as "monthly" | "annual") ?? "monthly",
+        (f.frequency as RecurrenceFrequency) ?? "monthly",
       ) &&
       !(Array.isArray(f.skipPeriods) && f.skipPeriods.includes(period)) &&
       !materializedFixedIds.has(String(f._id)) &&
@@ -530,7 +533,7 @@ export async function getMonthData(period: Period): Promise<MonthData> {
       cardName: f.cardId
         ? (cardName.get(String(f.cardId)) ?? null)
         : null,
-      frequency: (f.frequency as "monthly" | "annual") ?? "monthly",
+      frequency: (f.frequency as RecurrenceFrequency) ?? "monthly",
     }));
 
   return {

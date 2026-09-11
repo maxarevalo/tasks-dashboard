@@ -10,7 +10,8 @@ import {
   updateExpense,
 } from "@/features/gastos/actions";
 import { addMonths, periodShortLabel, type Period } from "@/lib/period";
-import type { CardDTO, ExpenseDTO } from "@/features/gastos/types";
+import { EXPENSE_TAGS, EXPENSE_TAG_ICONS } from "@/lib/tags";
+import type { CardDTO, ExpenseDTO, ExpenseTag } from "@/features/gastos/types";
 
 type Mode = "single" | "installments";
 
@@ -38,6 +39,7 @@ export function ExpenseForm({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [paid, setPaid] = useState(false);
+  const [tag, setTag] = useState<ExpenseTag | "">("");
 
   const [startPeriod, setStartPeriod] = useState<Period>(period);
   const [current, setCurrent] = useState("1");
@@ -57,6 +59,7 @@ export function ExpenseForm({
     setAmount(editing ? String(editing.amount) : "");
     setNote(editing?.note ?? "");
     setPaid(editing?.paid ?? false);
+    setTag(editing?.tag ?? "");
     setStartPeriod(period);
     setCurrent("1");
     setTotal("3");
@@ -94,6 +97,7 @@ export function ExpenseForm({
             currency,
             cardId: card ?? "",
             note,
+            tag,
           }),
         onClose,
       );
@@ -112,6 +116,7 @@ export function ExpenseForm({
             startPeriod,
             current: Number(current),
             total: Number(total),
+            tag,
           }),
         onClose,
       );
@@ -129,6 +134,7 @@ export function ExpenseForm({
           cardId: card ?? "",
           note,
           paid,
+          tag,
         }),
       onClose,
     );
@@ -206,6 +212,20 @@ export function ExpenseForm({
             </Select>
           </Field>
         </div>
+
+        <Field label="Etiqueta" hint="Opcional">
+          <Select
+            value={tag}
+            onChange={(e) => setTag(e.target.value as ExpenseTag | "")}
+          >
+            <option value="">Sin etiqueta</option>
+            {EXPENSE_TAGS.map((t) => (
+              <option key={t} value={t}>
+                {EXPENSE_TAG_ICONS[t]} {t}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
         {(mode === "installments" ? catForInstallments : category) ===
           "tarjeta" && (

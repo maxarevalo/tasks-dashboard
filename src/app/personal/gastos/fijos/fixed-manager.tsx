@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, Power, CircleSlash } from "lucide-react";
 import { Button } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
 import { periodShortLabel, currentPeriod } from "@/lib/period";
+import { EXPENSE_TAG_ICONS } from "@/lib/tags";
 import { useAction } from "@/features/gastos/use-action";
 import {
   updateFixedExpense,
@@ -59,6 +60,9 @@ export function FixedManager({
                     f.active && !finished ? "text-slate-900" : "text-slate-400"
                   }`}
                 >
+                  {f.tag && (
+                    <span title={f.tag}>{EXPENSE_TAG_ICONS[f.tag]}</span>
+                  )}
                   {f.description}
                   {!f.active && (
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
@@ -80,6 +84,7 @@ export function FixedManager({
                     ? ` hasta ${periodShortLabel(f.endPeriod)}`
                     : ""}
                   {f.frequency === "annual" ? " · anual" : ""}
+                  {f.frequency === "semiannual" ? " · semestral" : ""}
                   {f.autoGenerate ? " · automático" : " · manual"}
                 </p>
                 {f.skipPeriods.length > 0 && (
@@ -108,6 +113,7 @@ export function FixedManager({
                       endPeriod: f.endPeriod ?? "",
                       frequency: f.frequency,
                       autoGenerate: f.autoGenerate,
+                      tag: f.tag ?? "",
                       active: !f.active,
                     }),
                   )
