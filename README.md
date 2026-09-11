@@ -143,26 +143,38 @@ Código: `src/models/contable.ts`, `src/features/contable/` (queries, actions,
 
 ### Módulo: PF Dardo (`/personal/pf-dardo`)
 
-Tabla de plazos fijos + simulación con ingresos/egresos sueltos.
+Tabla de plazos fijos con renovación y monto real prorrateado por movimientos.
 
 - **Plazos fijos**: por cada uno se carga descripción (opcional), moneda,
   **fecha desde**, **plazo (en días)** y **TNA** (tasa nominal anual, %). Se
   calculan automáticamente: **fecha hasta** (desde + plazo), **% mensual**
-  (TNA/12), **monto ganado** y **monto al vencimiento** (interés simple:
-  `inicial × (1 + TNA/100 × días/365)`). El formulario muestra una vista
-  previa en vivo con estos cálculos antes de guardar. Se pueden crear tantos
-  como haga falta, editar y borrar.
-- **Informe de totales**: tarjetas con **total invertido**, **total ganado**
-  y **total al vencimiento**, sumados por moneda sobre todos los plazos
-  fijos cargados.
-- **Ingresos y egresos**: movimientos sueltos (fecha + descripción + monto),
-  por fuera de los plazos fijos. El **monto simulado** = total al
-  vencimiento de los plazos fijos + ingresos − egresos, y se recalcula al
-  instante con cada movimiento que se agrega, edita o borra.
+  (TNA/12), **monto ganado** y **monto al vencimiento**. El formulario
+  muestra una vista previa en vivo con estos cálculos antes de guardar. Se
+  pueden crear tantos como haga falta, editar y borrar.
+- **Depósitos y retiros durante el plazo**: desde el botón de movimientos de
+  cada fila se pueden anotar aportes o retiros con fecha (en cualquier
+  momento dentro del plazo), y el **monto ganado**/**monto al vencimiento**
+  se recalculan con **interés simple prorrateado por tramo**: cada tramo
+  entre movimientos gana intereses sobre el saldo realmente vigente en ese
+  tramo (`saldo × TNA/100 × días/365`), sin capitalizar hasta el
+  vencimiento. Sin movimientos da exactamente el interés simple de siempre
+  (`inicial × (1 + TNA/100 × días/365)`). Un retiro que dejaría el saldo en
+  negativo se rechaza.
+- **Renovar**: desde el menú (…) de un plazo fijo, "Renovar" cierra ese
+  ciclo (queda de solo lectura en el **historial de renovaciones**, fuera de
+  los totales activos) y abre uno nuevo pre-cargado con el **monto real al
+  vencimiento** como capital inicial, la misma tasa y plazo — todo
+  editable, para poder ajustar la TNA, el plazo o el monto en cada
+  renovación. El nuevo plazo queda enlazado al anterior (`renewedFromId`).
+- **Informe de totales**: tarjetas con **total invertido**, **movimientos
+  netos**, **total ganado** y **total al vencimiento**, sumados por moneda
+  sobre los plazos fijos **activos** (los ya renovados no se cuentan dos
+  veces: su valor "vive" en el plazo que los sucede).
 
-Código: `src/models/pf-dardo.ts` (Mongoose: `PlazoFijo`, `PfMovement`),
-`src/lib/pf.ts` (matemática pura: fechas e interés, libre de mongoose),
-`src/features/pf-dardo/` (queries, actions, types).
+Código: `src/models/pf-dardo.ts` (Mongoose: `PlazoFijo`, con `movements`
+embebidos y `renewedFromId`/`renewed` para la cadena de renovaciones),
+`src/lib/pf.ts` (matemática pura: fechas e interés prorrateado, libre de
+mongoose), `src/features/pf-dardo/` (queries, actions, types).
 
 ## Estructura
 
