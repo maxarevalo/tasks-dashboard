@@ -135,7 +135,10 @@ export type MatrixGroup = {
 
 export type ExpenseMatrix = {
   periods: Period[];
+  /** Moneda de visualización (en la unificada, la elegida para convertir). */
   currency: Currency;
+  /** true si esta matriz combina ARS + USD convertidos a `currency`. */
+  unified: boolean;
   groups: MatrixGroup[];
   columnTotals: Record<Period, number>;
   grandTotal: number;

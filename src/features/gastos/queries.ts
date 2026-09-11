@@ -14,6 +14,7 @@ import {
   type Period,
 } from "@/lib/period";
 import type { Currency } from "@/lib/money";
+import { convertAmount } from "@/lib/exchange";
 import {
   CATEGORY_ORDER,
   type CardDTO,
@@ -201,41 +202,39 @@ export async function getProjectedExpenseTotals(
 }
 
 /**
- * Matriz de gastos: filas = gasto (por categoría + descripción + tarjeta),
- * columnas = meses del rango. Incluye los gastos fijos activos como celdas
- * "estimadas" en los meses donde todavía no se materializaron.
+ * Núcleo compartido para armar la matriz de gastos (filas = categoría +
+ * descripción + tarjeta, columnas = meses). `sourceCurrencies` son las
+ * monedas que se leen de la base; `convert` pasa cada monto a la moneda de
+ * visualización (identidad en el modo por-moneda, con tasa en el unificado).
  */
-export async function getExpenseMatrix(
+async function buildExpenseMatrixCore(
+  uid: string,
   periods: Period[],
-  currency: Currency,
-): Promise<ExpenseMatrix> {
-  await connectToDatabase();
-  const uid = await getActiveProfileKey();
+  displayCurrency: Currency,
+  sourceCurrencies: Currency[],
+  convert: (amount: number, from: Currency) => number,
+): Promise<Omit<ExpenseMatrix, "hasOtherCurrency" | "unified">> {
+  const currencyFilter =
+    sourceCurrencies.length === 1
+      ? sourceCurrencies[0]
+      : { $in: sourceCurrencies };
 
-  const empty: ExpenseMatrix = {
-    periods,
-    currency,
-    groups: [],
-    columnTotals: Object.fromEntries(periods.map((p) => [p, 0])),
-    grandTotal: 0,
-    hasOtherCurrency: false,
-  };
-  if (periods.length === 0) return empty;
-
-  const other: Currency = currency === "ARS" ? "USD" : "ARS";
-  const [expenseDocs, otherCount, cards, fixedDocs] = await Promise.all([
-    Expense.find({ userId: uid, period: { $in: periods }, currency })
-      .select("period amount category description cardId fixedId")
-      .lean(),
-    Expense.countDocuments({
+  const [expenseDocs, cards, fixedDocs] = await Promise.all([
+    Expense.find({
       userId: uid,
       period: { $in: periods },
-      currency: other,
-    }),
+      currency: currencyFilter,
+    })
+      .select("period amount currency category description cardId fixedId")
+      .lean(),
     getCards(true),
-    FixedExpense.find({ userId: uid, active: true, currency })
+    FixedExpense.find({
+      userId: uid,
+      active: true,
+      currency: currencyFilter,
+    })
       .select(
-        "description category cardId amount startPeriod endPeriod skipPeriods frequency",
+        "description category cardId amount currency startPeriod endPeriod skipPeriods frequency",
       )
       .lean(),
   ]);
@@ -278,7 +277,10 @@ export async function getExpenseMatrix(
       String(e.description),
       cardId,
     );
-    const amount = (e.amount as number) ?? 0;
+    const amount = convert(
+      (e.amount as number) ?? 0,
+      (e.currency as Currency) ?? displayCurrency,
+    );
     const cell = row.cells[p] ?? { amount: 0, estimated: false };
     cell.amount += amount;
     row.cells[p] = cell;
@@ -292,7 +294,10 @@ export async function getExpenseMatrix(
       ? (f.skipPeriods as string[])
       : [];
     const cardId = f.cardId ? String(f.cardId) : null;
-    const amount = (f.amount as number) ?? 0;
+    const amount = convert(
+      (f.amount as number) ?? 0,
+      (f.currency as Currency) ?? displayCurrency,
+    );
     const freq = (f.frequency as "monthly" | "annual") ?? "monthly";
     for (const p of periods) {
       if (
@@ -339,14 +344,80 @@ export async function getExpenseMatrix(
     return { category, rows, subtotals, total };
   }).filter((g) => g.rows.length > 0);
 
-  return {
+  return { periods, currency: displayCurrency, groups, columnTotals, grandTotal };
+}
+
+/**
+ * Matriz de gastos en una sola moneda: filas = gasto (por categoría +
+ * descripción + tarjeta), columnas = meses del rango. Incluye los gastos
+ * fijos activos como celdas "estimadas" en los meses sin materializar.
+ */
+export async function getExpenseMatrix(
+  periods: Period[],
+  currency: Currency,
+): Promise<ExpenseMatrix> {
+  await connectToDatabase();
+  const uid = await getActiveProfileKey();
+
+  const empty: ExpenseMatrix = {
     periods,
     currency,
-    groups,
-    columnTotals,
-    grandTotal,
-    hasOtherCurrency: otherCount > 0,
+    unified: false,
+    groups: [],
+    columnTotals: Object.fromEntries(periods.map((p) => [p, 0])),
+    grandTotal: 0,
+    hasOtherCurrency: false,
   };
+  if (periods.length === 0) return empty;
+
+  const other: Currency = currency === "ARS" ? "USD" : "ARS";
+  const [core, otherCount] = await Promise.all([
+    buildExpenseMatrixCore(uid, periods, currency, [currency], (a) => a),
+    Expense.countDocuments({
+      userId: uid,
+      period: { $in: periods },
+      currency: other,
+    }),
+  ]);
+
+  return { ...core, unified: false, hasOtherCurrency: otherCount > 0 };
+}
+
+/**
+ * Igual que `getExpenseMatrix`, pero combina ARS y USD en una sola moneda
+ * (`displayCurrency`), convirtiendo cada gasto con `rate` (ARS por 1 USD).
+ */
+export async function getUnifiedExpenseMatrix(
+  periods: Period[],
+  displayCurrency: Currency,
+  rate: number,
+): Promise<ExpenseMatrix> {
+  await connectToDatabase();
+  const uid = await getActiveProfileKey();
+
+  const empty: ExpenseMatrix = {
+    periods,
+    currency: displayCurrency,
+    unified: true,
+    groups: [],
+    columnTotals: Object.fromEntries(periods.map((p) => [p, 0])),
+    grandTotal: 0,
+    hasOtherCurrency: false,
+  };
+  if (periods.length === 0) return empty;
+
+  const convert = (amount: number, from: Currency) =>
+    convertAmount(amount, from, displayCurrency, rate);
+
+  const core = await buildExpenseMatrixCore(
+    uid,
+    periods,
+    displayCurrency,
+    ["ARS", "USD"],
+    convert,
+  );
+
+  return { ...core, unified: true, hasOtherCurrency: false };
 }
 
 export async function getMonthData(period: Period): Promise<MonthData> {

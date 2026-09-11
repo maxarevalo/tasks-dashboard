@@ -69,8 +69,14 @@ activo), `src/features/profiles/actions.ts`.
   "Ninguno" para ajustar rápido, y "Replicar N" copia solo lo elegido.
 - **Tabla mensual** (`/personal/gastos/tabla`): matriz con un mes por columna
   (ventanas de 10 meses, navegables ‹/›), filas agrupadas por categoría,
-  subtotales por categoría y total por mes. Toggle ARS/USD. Los gastos fijos
-  sin cargar aparecen como celdas estimadas (cursiva + `*`).
+  subtotales por categoría y total por mes. Los gastos fijos sin cargar
+  aparecen como celdas estimadas (cursiva + `*`).
+  - **ARS / USD / Unificado**: el modo "Unificado" combina ambas monedas con
+    la cotización configurada en Estado contable → Vista unificada (misma
+    `ExchangeRate` del perfil), y un sub-toggle "en ARS / en USD" para elegir
+    en qué moneda ver el total. Un gasto con la misma descripción cargado
+    alguna vez en ARS y otra en USD se suma ya convertido en la misma fila.
+    Si no hay cotización configurada, muestra un aviso con link para cargarla.
 - **Importar masivo** (botón "Importar"): se pega **un array JSON** (recomendado)
   o el texto crudo del resumen de tarjeta. Segundo paso: se edita cada ítem
   (mes, categoría, moneda, tarjeta, monto, pagado) o se aplica categoría/tarjeta
