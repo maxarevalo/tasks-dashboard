@@ -472,58 +472,68 @@ export async function replicateExpense(id: string): Promise<ActionResult> {
   });
 }
 
-/** Copia todos los gastos (no cuotas) de `period` al mes siguiente. */
-export async function replicateAllToNextMonth(
-  targetPeriod: string,
+/** Copia los gastos elegidos (por id) al mes siguiente de cada uno. */
+export async function replicateSelected(
+  ids: string[],
 ): Promise<ActionResult> {
   return run(async (uid) => {
-    const p = period.parse(targetPeriod);
-    const nextPeriod = addMonths(p, 1);
-
-    const rows = await Expense.find({
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new Error("No seleccionaste ningún gasto.");
+    }
+    const docs = await Expense.find({
+      _id: { $in: ids },
       userId: uid,
-      period: p,
       source: { $ne: "installment" },
     }).lean();
-    if (rows.length === 0) {
-      throw new Error("No hay gastos para replicar en este mes.");
+    if (docs.length === 0) {
+      throw new Error("No se encontraron los gastos seleccionados.");
     }
 
-    const existing = await Expense.find({ userId: uid, period: nextPeriod })
-      .select("category description currency cardId")
-      .lean();
-    const existingByKey = new Map<
-      string,
-      { description: unknown; cardId: unknown }[]
-    >();
-    for (const e of existing) {
-      const key = `${e.category}|${e.currency}`;
-      existingByKey.set(key, [...(existingByKey.get(key) ?? []), e]);
+    // Agrupa por mes destino (normalmente todos comparten el mismo mes de origen).
+    const byNextPeriod = new Map<string, typeof docs>();
+    for (const d of docs) {
+      const np = addMonths(String(d.period), 1);
+      byNextPeriod.set(np, [...(byNextPeriod.get(np) ?? []), d]);
     }
 
-    const toInsert = rows
-      .filter((r) => {
-        const key = `${r.category}|${r.currency}`;
-        return !hasEquivalent(
-          existingByKey.get(key) ?? [],
-          String(r.description),
-          r.cardId,
-        );
-      })
-      .map((r) => ({
-        userId: uid,
-        period: nextPeriod,
-        category: r.category,
-        description: r.description,
-        amount: r.amount,
-        currency: r.currency,
-        cardId: r.cardId ?? undefined,
-        source: "manual" as const,
-        paid: false,
-      }));
+    const toInsert: Record<string, unknown>[] = [];
+    for (const [nextPeriod, group] of byNextPeriod) {
+      const existing = await Expense.find({ userId: uid, period: nextPeriod })
+        .select("category description currency cardId")
+        .lean();
+      const byKey = new Map<
+        string,
+        { description: unknown; cardId: unknown }[]
+      >();
+      for (const e of existing) {
+        const key = `${e.category}|${e.currency}`;
+        byKey.set(key, [...(byKey.get(key) ?? []), e]);
+      }
+
+      for (const d of group) {
+        const key = `${d.category}|${d.currency}`;
+        const bucket = byKey.get(key) ?? [];
+        if (hasEquivalent(bucket, String(d.description), d.cardId)) continue;
+        // Evita duplicar si dos seleccionados del mismo lote coinciden.
+        bucket.push({ description: d.description, cardId: d.cardId });
+        byKey.set(key, bucket);
+
+        toInsert.push({
+          userId: uid,
+          period: nextPeriod,
+          category: d.category,
+          description: d.description,
+          amount: d.amount,
+          currency: d.currency,
+          cardId: d.cardId ?? undefined,
+          source: "manual",
+          paid: false,
+        });
+      }
+    }
 
     if (toInsert.length === 0) {
-      throw new Error("Todos los gastos de este mes ya están replicados.");
+      throw new Error("Los gastos seleccionados ya estaban replicados.");
     }
     await Expense.insertMany(toInsert);
   });

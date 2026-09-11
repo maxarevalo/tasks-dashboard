@@ -23,7 +23,6 @@ import {
   deleteExpense,
   skipFixedForPeriod,
   replicateExpense,
-  replicateAllToNextMonth,
 } from "@/features/gastos/actions";
 import {
   CATEGORY_LABELS,
@@ -36,6 +35,7 @@ import { periodLabel, addMonths, type Period } from "@/lib/period";
 import { ExpenseForm } from "./expense-form";
 import { FixedForm } from "./fixed-form";
 import { BulkImport } from "./bulk-import";
+import { ReplicateDialog } from "./replicate-dialog";
 
 export function ExpensesPanel({
   period,
@@ -52,7 +52,7 @@ export function ExpensesPanel({
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
   const [fixedEditing, setFixedEditing] = useState<FixedExpenseDTO | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
-  const { pending: replicatingAll, exec: execReplicateAll } = useAction();
+  const [replicateOpen, setReplicateOpen] = useState(false);
 
   const openNew = () => {
     setEditing(null);
@@ -64,32 +64,20 @@ export function ExpensesPanel({
     items: expenses.filter((e) => e.category === cat),
   })).filter((g) => g.items.length > 0);
 
-  const replicableCount = expenses.filter(
+  const replicableExpenses = expenses.filter(
     (e) => e.source !== "installment" && !e.replicatedNextMonth,
-  ).length;
-
-  function replicateAll() {
-    const nextLabel = periodLabel(addMonths(period, 1));
-    if (
-      !confirm(
-        `¿Replicar ${replicableCount} gasto${replicableCount === 1 ? "" : "s"} de este mes a ${nextLabel}? Los que ya estén ahí no se duplican.`,
-      )
-    ) {
-      return;
-    }
-    execReplicateAll(() => replicateAllToNextMonth(period));
-  }
+  );
+  const nextLabel = periodLabel(addMonths(period, 1));
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900">Detalle</h3>
         <div className="flex flex-wrap gap-2">
-          {replicableCount > 0 && (
+          {replicableExpenses.length > 0 && (
             <Button
               variant="secondary"
-              disabled={replicatingAll}
-              onClick={replicateAll}
+              onClick={() => setReplicateOpen(true)}
             >
               <CopyPlus className="h-4 w-4" />
               Replicar mes siguiente
@@ -160,6 +148,13 @@ export function ExpensesPanel({
         onClose={() => setBulkOpen(false)}
         period={period}
         cards={cards}
+      />
+
+      <ReplicateDialog
+        open={replicateOpen}
+        onClose={() => setReplicateOpen(false)}
+        nextLabel={nextLabel}
+        items={replicableExpenses}
       />
     </div>
   );

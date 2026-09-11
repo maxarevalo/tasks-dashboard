@@ -60,8 +60,10 @@ activo), `src/features/profiles/actions.ts`.
   cuotas), "Replicar al mes siguiente" copia ese gasto puntual al mes que
   viene (no duplica si ya hay uno con la misma descripción/tarjeta ahí). Si el
   gasto ya está replicado, la fila muestra el tag **"Replicado en próx. mes"**.
-  También hay un botón **"Replicar mes siguiente"** que copia de una todos los
-  gastos del mes que todavía no tengan su réplica.
+  El botón **"Replicar mes siguiente"** del encabezado abre un paso previo:
+  una lista con checkbox de todo lo replicable ese mes, con **los gastos de
+  categoría "fijo" tildados por defecto** (el resto sin tildar); "Todos" /
+  "Ninguno" para ajustar rápido, y "Replicar N" copia solo lo elegido.
 - **Tabla mensual** (`/personal/gastos/tabla`): matriz con un mes por columna
   (ventanas de 10 meses, navegables ‹/›), filas agrupadas por categoría,
   subtotales por categoría y total por mes. Toggle ARS/USD. Los gastos fijos
