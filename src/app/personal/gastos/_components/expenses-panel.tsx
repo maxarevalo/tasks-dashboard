@@ -65,6 +65,8 @@ export function ExpensesPanel({
     items: expenses.filter((e) => e.category === cat),
   })).filter((g) => g.items.length > 0);
 
+  const cardOrder = new Map(cards.map((c, i) => [c.id, i]));
+
   const replicableExpenses = expenses.filter(
     (e) => e.source !== "installment" && !e.replicatedNextMonth,
   );
@@ -100,32 +102,67 @@ export function ExpensesPanel({
           No hay gastos cargados en este mes.
         </div>
       ) : (
-        grouped.map(({ cat, items }) => (
-          <section
-            key={cat}
-            className="overflow-hidden rounded-xl border border-slate-200 bg-white"
-          >
-            <header className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {CATEGORY_LABELS[cat]}
-            </header>
-            <ul className="divide-y divide-slate-100">
-              {items.map((e) => (
-                <ExpenseRow
-                  key={e.id}
-                  expense={e}
-                  onEdit={() => {
-                    setEditing(e);
-                    setFormOpen(true);
-                  }}
-                  onEditFixed={() => {
-                    const t = fixedTemplates.find((f) => f.id === e.fixedId);
-                    if (t) setFixedEditing(t);
-                  }}
-                />
-              ))}
-            </ul>
-          </section>
-        ))
+        grouped.map(({ cat, items }) => {
+          const cardGroups = groupByCard(items, cardOrder);
+          const onEdit = (e: ExpenseDTO) => {
+            setEditing(e);
+            setFormOpen(true);
+          };
+          const onEditFixed = (e: ExpenseDTO) => {
+            const t = fixedTemplates.find((f) => f.id === e.fixedId);
+            if (t) setFixedEditing(t);
+          };
+
+          return (
+            <section
+              key={cat}
+              className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+            >
+              <header className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {CATEGORY_LABELS[cat]}
+              </header>
+
+              {cardGroups.length > 1 ? (
+                cardGroups.map((g) => (
+                  <div key={g.key} className="border-b border-slate-100 last:border-0">
+                    <div className="flex items-center justify-between gap-2 bg-slate-50/70 px-4 py-1.5">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                        <CreditCard className="h-3.5 w-3.5" />
+                        {g.cardName ?? "Sin tarjeta"}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-slate-700">
+                        {g.subtotal.ARS !== 0 && formatMoney(g.subtotal.ARS, "ARS")}
+                        {g.subtotal.ARS !== 0 && g.subtotal.USD !== 0 ? " · " : ""}
+                        {g.subtotal.USD !== 0 && formatMoney(g.subtotal.USD, "USD")}
+                      </span>
+                    </div>
+                    <ul className="divide-y divide-slate-100">
+                      {g.items.map((e) => (
+                        <ExpenseRow
+                          key={e.id}
+                          expense={e}
+                          onEdit={() => onEdit(e)}
+                          onEditFixed={() => onEditFixed(e)}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {items.map((e) => (
+                    <ExpenseRow
+                      key={e.id}
+                      expense={e}
+                      onEdit={() => onEdit(e)}
+                      onEditFixed={() => onEditFixed(e)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+          );
+        })
       )}
 
       <ExpenseForm
@@ -159,6 +196,38 @@ export function ExpensesPanel({
       />
     </div>
   );
+}
+
+type CardGroup = {
+  key: string;
+  cardName: string | null;
+  items: ExpenseDTO[];
+  subtotal: { ARS: number; USD: number };
+};
+
+/** Subagrupa los gastos de una categoría por tarjeta, con subtotal por moneda. */
+function groupByCard(
+  items: ExpenseDTO[],
+  cardOrder: Map<string, number>,
+): CardGroup[] {
+  const map = new Map<string, CardGroup>();
+  for (const e of items) {
+    const key = e.cardId ?? "__sin_tarjeta__";
+    const group = map.get(key) ?? {
+      key,
+      cardName: e.cardName,
+      items: [],
+      subtotal: { ARS: 0, USD: 0 },
+    };
+    group.items.push(e);
+    group.subtotal[e.currency] += e.amount;
+    map.set(key, group);
+  }
+  return [...map.values()].sort((a, b) => {
+    const oa = a.cardName ? (cardOrder.get(a.key) ?? 999) : Infinity;
+    const ob = b.cardName ? (cardOrder.get(b.key) ?? 999) : Infinity;
+    return oa - ob;
+  });
 }
 
 function ExpenseRow({

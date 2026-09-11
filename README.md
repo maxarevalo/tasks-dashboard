@@ -60,11 +60,15 @@ activo), `src/features/profiles/actions.ts`.
     anual una sola vez al año (ej. patente). Los no mensuales se proyectan 5
     años hacia adelante en vez de 2.
 - **Etiqueta por gasto** (opcional, con ícono): Supermercado, Obra,
-  Suscripciones, Combustible, Auto, Dardo, Farmacia, Salidas, Otros. Se elige
-  al cargar o editar cualquier gasto (suelto, en cuotas o fijo); en los fijos
-  se propaga automáticamente a cada mes materializado. Sin etiqueta por
-  defecto. Enum e íconos en `src/lib/tags.ts`.
+  Suscripciones, Combustible, Auto, Dardo, Farmacia, Salidas, Servicios,
+  Otros. Se elige al cargar o editar cualquier gasto (suelto, en cuotas o
+  fijo); en los fijos se propaga automáticamente a cada mes materializado.
+  Sin etiqueta por defecto. Enum e íconos en `src/lib/tags.ts`.
 - Marcar pagado / pendiente por gasto.
+- **Detalle agrupado por tarjeta**: dentro de cada categoría, si hay gastos
+  de más de una tarjeta (o sin tarjeta), se subagrupan por tarjeta con su
+  propio subtotal por moneda. Si todo es de la misma tarjeta (o ninguna), se
+  ve como lista simple, sin el subtotal redundante.
 - **Replicar al mes siguiente**: desde el menú (…) de cualquier gasto (no
   cuotas), "Replicar al mes siguiente" copia ese gasto puntual al mes que
   viene (no duplica si ya hay uno con la misma descripción/tarjeta ahí). Si el
