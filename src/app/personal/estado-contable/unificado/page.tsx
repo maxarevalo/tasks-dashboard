@@ -68,6 +68,17 @@ export default async function UnificadoPage({
               <p className="mt-1 text-[11px] text-slate-400">
                 de {other}: {fmt(overview.savingsFrom[other])}
               </p>
+              <div className="mt-2 border-t border-slate-100 pt-2">
+                <p className="text-xs font-medium text-slate-500">
+                  Ahorros REALES
+                </p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
+                  {fmt(overview.savingsRealTotal)}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Ahorros totales − plazos fijos (PF Dardo)
+                </p>
+              </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-xs font-medium text-slate-500">

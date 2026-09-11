@@ -240,6 +240,7 @@ export async function getUnifiedOverview(
     displayCurrency,
     rate,
     savingsTotal: sum2(ov.savingsTotal),
+    savingsRealTotal: sum2(ov.savingsRealTotal),
     incomeThisMonth: sum2(ov.incomeThisMonth),
     expenseThisMonth: sum2(ov.expenseThisMonth),
     availableThisMonth: sum2(ov.availableThisMonth),

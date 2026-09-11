@@ -119,6 +119,8 @@ export type UnifiedOverview = {
   displayCurrency: Currency;
   rate: ExchangeRateDTO;
   savingsTotal: number;
+  /** savingsTotal menos los montos al vencimiento de los plazos fijos activos de PF Dardo. */
+  savingsRealTotal: number;
   incomeThisMonth: number;
   expenseThisMonth: number;
   availableThisMonth: number;
