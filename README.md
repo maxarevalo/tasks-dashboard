@@ -121,6 +121,10 @@ Cruza con Gastos para proyectar el saldo.
   **rendimiento** configurable por cuenta: TNA o TEA (capitalizan mes a mes),
   tasa mensual directa (sin capitalizar), o **saldos cargados a mano** por mes.
   Una cuenta por moneda se marca "acá cae el excedente del mes".
+  - **Ahorros REALES**: junto a "Ahorros totales" se muestra este segundo
+    monto = ahorros totales **menos** la suma de los montos al vencimiento
+    de los plazos fijos **activos** de PF Dardo, para no contar dos veces la
+    plata que ya está puesta en un plazo fijo.
 - **Ingresos** (`/ingresos`): por **origen**, únicos o recurrentes con
   **frecuencia mensual, semestral o anual**, "confirmados" o "posibles".
   Un ingreso semestral (ej. **aguinaldo/SAC**) se carga una vez, con inicio en

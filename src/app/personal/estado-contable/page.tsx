@@ -89,6 +89,20 @@ export default async function EstadoContablePage({
               usd={overview.savingsTotal.USD}
             />
           </div>
+          <div className="mt-2 border-t border-slate-100 pt-2">
+            <p className="text-xs font-medium text-slate-500">
+              Ahorros REALES
+            </p>
+            <div className="mt-1">
+              <Money
+                ars={overview.savingsRealTotal.ARS}
+                usd={overview.savingsRealTotal.USD}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Ahorros totales − plazos fijos (PF Dardo)
+            </p>
+          </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-xs font-medium text-slate-500">

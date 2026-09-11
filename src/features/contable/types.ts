@@ -79,6 +79,12 @@ export type ContableOverview = {
   period: Period;
   /** Ahorros totales hoy, por moneda. */
   savingsTotal: Record<Currency, number>;
+  /**
+   * Ahorros totales menos la suma de los montos al vencimiento de los
+   * plazos fijos activos de PF Dardo (para no contar dos veces la plata que
+   * ya está puesta en un plazo fijo).
+   */
+  savingsRealTotal: Record<Currency, number>;
   /** Ahorros por disponibilidad. */
   savingsByAvailability: Record<Availability, Record<Currency, number>>;
   /** Ahorros por categoría (para el desglose). */

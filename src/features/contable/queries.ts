@@ -11,6 +11,7 @@ import {
 import { CURRENCIES, type Currency } from "@/lib/money";
 import { effectiveRate, convertAmount } from "@/lib/exchange";
 import { getProjectedExpenseTotals } from "@/features/gastos/queries";
+import { getPfOverview } from "@/features/pf-dardo/queries";
 import { buildProjection } from "./projection";
 import type {
   SavingsAccountDTO,
@@ -115,10 +116,11 @@ const zeroByCurrency = (): Record<Currency, number> => ({ ARS: 0, USD: 0 });
 
 export async function getContableOverview(): Promise<ContableOverview> {
   const period = currentPeriod();
-  const [accounts, incomes, expenseTotals] = await Promise.all([
+  const [accounts, incomes, expenseTotals, pf] = await Promise.all([
     getSavingsAccounts(false),
     getIncomes(),
     getProjectedExpenseTotals([period]),
+    getPfOverview(),
   ]);
 
   const savingsTotal = zeroByCurrency();
@@ -146,9 +148,15 @@ export async function getContableOverview(): Promise<ContableOverview> {
       savingsTotal[c] + incomeThisMonth[c] - expenseThisMonth[c];
   }
 
+  const savingsRealTotal = zeroByCurrency();
+  for (const c of CURRENCIES) {
+    savingsRealTotal[c] = savingsTotal[c] - pf.totals[c].maturity;
+  }
+
   return {
     period,
     savingsTotal,
+    savingsRealTotal,
     savingsByAvailability,
     savingsByCategory: [...byCategoryMap.entries()]
       .map(([category, v]) => ({ category, ...v }))
