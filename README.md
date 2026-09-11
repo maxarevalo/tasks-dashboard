@@ -141,6 +141,29 @@ Cruza con Gastos para proyectar el saldo.
 Código: `src/models/contable.ts`, `src/features/contable/` (queries, actions,
 `projection.ts` con la matemática pura), `src/lib/rates.ts`.
 
+### Módulo: PF Dardo (`/personal/pf-dardo`)
+
+Tabla de plazos fijos + simulación con ingresos/egresos sueltos.
+
+- **Plazos fijos**: por cada uno se carga descripción (opcional), moneda,
+  **fecha desde**, **plazo (en días)** y **TNA** (tasa nominal anual, %). Se
+  calculan automáticamente: **fecha hasta** (desde + plazo), **% mensual**
+  (TNA/12), **monto ganado** y **monto al vencimiento** (interés simple:
+  `inicial × (1 + TNA/100 × días/365)`). El formulario muestra una vista
+  previa en vivo con estos cálculos antes de guardar. Se pueden crear tantos
+  como haga falta, editar y borrar.
+- **Informe de totales**: tarjetas con **total invertido**, **total ganado**
+  y **total al vencimiento**, sumados por moneda sobre todos los plazos
+  fijos cargados.
+- **Ingresos y egresos**: movimientos sueltos (fecha + descripción + monto),
+  por fuera de los plazos fijos. El **monto simulado** = total al
+  vencimiento de los plazos fijos + ingresos − egresos, y se recalcula al
+  instante con cada movimiento que se agrega, edita o borra.
+
+Código: `src/models/pf-dardo.ts` (Mongoose: `PlazoFijo`, `PfMovement`),
+`src/lib/pf.ts` (matemática pura: fechas e interés, libre de mongoose),
+`src/features/pf-dardo/` (queries, actions, types).
+
 ## Estructura
 
 ```
@@ -153,7 +176,9 @@ src/
     icons.ts                  Mapa nombre -> icono (lucide-react)
     period.ts / money.ts      Helpers de meses y moneda
     tags.ts                   Etiquetas de gasto (enum + íconos, libre de mongoose)
+    pf.ts                     Plazos fijos: fechas e interés (libre de mongoose)
   models/gastos.ts            Schemas Mongoose (Card, Expense, FixedExpense)
+  models/pf-dardo.ts          Schemas Mongoose (PlazoFijo, PfMovement)
   features/gastos/            queries.ts (lectura), actions.ts (Server Actions), types.ts
   components/
     dashboard-shell.tsx       Layout responsive (sidebar + topbar + drawer mobile)
