@@ -7,7 +7,12 @@ import { auth } from "@/auth";
 import { connectToDatabase } from "@/lib/db";
 import { getActiveProfileKey } from "@/lib/profile";
 import { Card, Expense, FixedExpense } from "@/models/gastos";
-import { addMonths, currentPeriod as currentPeriodValue, isValidPeriod } from "@/lib/period";
+import {
+  addMonths,
+  currentPeriod as currentPeriodValue,
+  isValidPeriod,
+  periodMatchesCadence,
+} from "@/lib/period";
 import type { ActionResult, DupStatus } from "./types";
 
 const GASTOS_PATH = "/personal/gastos";
@@ -107,6 +112,8 @@ const fixedInput = z.object({
   startPeriod: period,
   endPeriod: period.optional().or(z.literal("").transform(() => undefined)),
   active: z.boolean().optional(),
+  /** "monthly" (default) o "annual": una vez por año, en el mes de startPeriod. */
+  frequency: z.enum(["monthly", "annual"]).default("monthly"),
   autoGenerate: z.boolean().optional(),
 });
 
@@ -116,7 +123,15 @@ const createFixedInput = fixedInput.extend({
 });
 
 /** Meses hacia adelante que se materializan de una para gastos automáticos. */
-const AUTO_FIXED_HORIZON = 24;
+const AUTO_FIXED_HORIZON_MONTHLY = 24;
+/** Los anuales se proyectan más lejos para que se vean varias ocurrencias. */
+const AUTO_FIXED_HORIZON_ANNUAL = 60;
+
+function autoFixedHorizon(frequency: "monthly" | "annual"): number {
+  return frequency === "annual"
+    ? AUTO_FIXED_HORIZON_ANNUAL
+    : AUTO_FIXED_HORIZON_MONTHLY;
+}
 
 type FixedTemplateLike = {
   _id: unknown;
@@ -128,6 +143,7 @@ type FixedTemplateLike = {
   startPeriod: string;
   endPeriod?: string | null;
   skipPeriods?: string[];
+  frequency?: "monthly" | "annual";
 };
 
 /**
@@ -151,9 +167,12 @@ async function materializeFixedRange(
   if (start > end) return;
 
   const skip = new Set(template.skipPeriods ?? []);
+  const freq = template.frequency ?? "monthly";
   const periods: string[] = [];
   for (let p = start; p <= end; p = addMonths(p, 1)) {
-    if (!skip.has(p)) periods.push(p);
+    if (skip.has(p)) continue;
+    if (!periodMatchesCadence(template.startPeriod, p, freq)) continue;
+    periods.push(p);
   }
   if (periods.length === 0) return;
 
@@ -583,7 +602,7 @@ export async function createFixedExpense(
         uid,
         doc.toObject() as unknown as FixedTemplateLike,
         applyFrom,
-        addMonths(applyFrom, AUTO_FIXED_HORIZON),
+        addMonths(applyFrom, autoFixedHorizon(data.frequency)),
       );
     }
   });
@@ -616,7 +635,13 @@ export async function updateFixedExpense(
           uid,
           doc as unknown as FixedTemplateLike,
           applyFrom,
-          addMonths(applyFrom, AUTO_FIXED_HORIZON),
+          addMonths(
+            applyFrom,
+            autoFixedHorizon(
+              ((doc as { frequency?: "monthly" | "annual" }).frequency) ??
+                "monthly",
+            ),
+          ),
           {
             updateExisting: true,
             createMissing: Boolean((doc as { autoGenerate?: boolean }).autoGenerate),
@@ -677,6 +702,8 @@ export async function generateFixedForPeriod(
           Array.isArray(t.skipPeriods) && t.skipPeriods.includes(p);
         if (end && p > end) return false;
         if (skipped || done.has(String(t._id))) return false;
+        const freq = (t.frequency as "monthly" | "annual") ?? "monthly";
+        if (!periodMatchesCadence(String(t.startPeriod), p, freq)) return false;
         // Ya hay un gasto con la misma descripción/tarjeta (ej. replicado a mano).
         const key = `${(t.category as string) ?? "fijo"}|${t.currency}`;
         return !hasEquivalent(

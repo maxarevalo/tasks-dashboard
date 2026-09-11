@@ -10,6 +10,9 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
+export const FIXED_FREQUENCIES = ["monthly", "annual"] as const;
+export type FixedFrequency = (typeof FIXED_FREQUENCIES)[number];
+
 const CURRENCY_ENUM = ["ARS", "USD"] as const;
 
 /* ------------------------------- Card ---------------------------------- */
@@ -43,9 +46,12 @@ const fixedExpenseSchema = new Schema(
       default: "fijo",
     },
     cardId: { type: Schema.Types.ObjectId, ref: "Card" },
-    startPeriod: { type: String, required: true }, // YYYY-MM
+    startPeriod: { type: String, required: true }, // YYYY-MM: también fija el mes de cobro si es anual
     endPeriod: { type: String, default: null }, // null = indefinido
     active: { type: Boolean, default: true },
+    // "monthly" (default) se cobra todos los meses; "annual" solo en el mes
+    // de startPeriod, cada 12 meses.
+    frequency: { type: String, enum: FIXED_FREQUENCIES, default: "monthly" },
     // Si es true, el gasto se materializa solo en cada mes que se visita.
     autoGenerate: { type: Boolean, default: false },
     // Meses (YYYY-MM) en los que este fijo fue quitado a mano.

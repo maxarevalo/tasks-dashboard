@@ -9,7 +9,18 @@ import {
   createFixedExpense,
   updateFixedExpense,
 } from "@/features/gastos/actions";
-import type { CardDTO, FixedExpenseDTO } from "@/features/gastos/types";
+import type {
+  CardDTO,
+  FixedExpenseDTO,
+  FixedFrequency,
+} from "@/features/gastos/types";
+
+const monthName = (p: Period) => {
+  const [y, m] = p.split("-").map(Number);
+  return new Intl.DateTimeFormat("es-AR", { month: "long" }).format(
+    new Date(y, m - 1, 1),
+  );
+};
 
 export function FixedForm({
   open,
@@ -33,6 +44,7 @@ export function FixedForm({
   const [cardId, setCardId] = useState("");
   const [startPeriod, setStartPeriod] = useState(currentPeriod());
   const [endPeriod, setEndPeriod] = useState("");
+  const [frequency, setFrequency] = useState<FixedFrequency>("monthly");
   const [autoGenerate, setAutoGenerate] = useState(true);
   const [applyFrom, setApplyFrom] = useState(currentPeriod());
 
@@ -48,6 +60,7 @@ export function FixedForm({
     setCardId(editing?.cardId ?? "");
     setStartPeriod(editing?.startPeriod ?? currentPeriod());
     setEndPeriod(editing?.endPeriod ?? "");
+    setFrequency(editing?.frequency ?? "monthly");
     setAutoGenerate(editing ? editing.autoGenerate : true);
     setApplyFrom(effectiveFrom ?? currentPeriod());
   } else if (!open && syncedFor !== null) {
@@ -64,6 +77,7 @@ export function FixedForm({
       cardId: category === "prestamo" ? "" : cardId,
       startPeriod,
       endPeriod: endPeriod || "",
+      frequency,
       autoGenerate,
     };
 
@@ -163,6 +177,16 @@ export function FixedForm({
           )}
         </div>
 
+        <Field label="Frecuencia">
+          <Select
+            value={frequency}
+            onChange={(e) => setFrequency(e.target.value as FixedFrequency)}
+          >
+            <option value="monthly">Mensual</option>
+            <option value="annual">Anual</option>
+          </Select>
+        </Field>
+
         <div className="grid grid-cols-2 gap-3">
           <Field label="Desde">
             <Input
@@ -182,6 +206,14 @@ export function FixedForm({
           </Field>
         </div>
 
+        {frequency === "annual" && (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            Se va a cargar una vez al año, en {monthName(startPeriod)}
+            {endPeriod ? ` (hasta ${endPeriod})` : ""}. El resto de los meses
+            no aparece.
+          </p>
+        )}
+
         <label className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
           <input
             type="checkbox"
@@ -192,7 +224,8 @@ export function FixedForm({
           <span>
             Cargarlo automáticamente en el mes actual y en todos los siguientes.
             <span className="block text-xs text-slate-400">
-              Si lo destildás, queda como plantilla y lo cargás a mano cada mes.
+              Si lo destildás, queda como plantilla y lo cargás a mano cada mes
+              {frequency === "annual" ? " en que corresponda" : ""}.
             </span>
           </span>
         </label>

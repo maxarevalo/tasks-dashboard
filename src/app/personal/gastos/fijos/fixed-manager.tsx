@@ -79,6 +79,7 @@ export function FixedManager({
                   {f.endPeriod
                     ? ` hasta ${periodShortLabel(f.endPeriod)}`
                     : ""}
+                  {f.frequency === "annual" ? " · anual" : ""}
                   {f.autoGenerate ? " · automático" : " · manual"}
                 </p>
                 {f.skipPeriods.length > 0 && (
@@ -105,6 +106,7 @@ export function FixedManager({
                       cardId: f.cardId ?? "",
                       startPeriod: f.startPeriod,
                       endPeriod: f.endPeriod ?? "",
+                      frequency: f.frequency,
                       autoGenerate: f.autoGenerate,
                       active: !f.active,
                     }),

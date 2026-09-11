@@ -1,8 +1,8 @@
 import type { Currency } from "@/lib/money";
-import type { ExpenseCategory } from "@/models/gastos";
+import type { ExpenseCategory, FixedFrequency } from "@/models/gastos";
 import type { Period } from "@/lib/period";
 
-export type { Currency, ExpenseCategory, Period };
+export type { Currency, ExpenseCategory, Period, FixedFrequency };
 
 export type CardDTO = {
   id: string;
@@ -52,6 +52,8 @@ export type FixedExpenseDTO = {
   startPeriod: Period;
   endPeriod: Period | null;
   active: boolean;
+  /** "monthly" = todos los meses; "annual" = una vez por año, en el mes de startPeriod. */
+  frequency: FixedFrequency;
   autoGenerate: boolean;
   skipPeriods: Period[];
 };
@@ -75,6 +77,7 @@ export type PendingFixedItem = {
   currency: Currency;
   category: "fijo" | "prestamo";
   cardName: string | null;
+  frequency: FixedFrequency;
 };
 
 export type MonthData = {

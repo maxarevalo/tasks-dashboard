@@ -38,6 +38,7 @@ export function GenerateFixedButton({
               </p>
               <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
                 <span>{CATEGORY_LABELS[it.category]}</span>
+                {it.frequency === "annual" && <span>Anual</span>}
                 {it.cardName && (
                   <span className="inline-flex items-center gap-1">
                     <CreditCard className="h-3 w-3" />

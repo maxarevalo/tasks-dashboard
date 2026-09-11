@@ -55,6 +55,9 @@ activo), `src/features/profiles/actions.ts`.
   - **Aviso de fin**: si un fijo no continúa el mes siguiente (fecha "hasta"
     alcanzada, pausado o plantilla borrada), la fila muestra un badge y el mes
     un banner.
+  - **Frecuencia mensual o anual**: un fijo anual se carga una sola vez al año,
+    en el mes de "Desde" (ej. seguro del auto, patente). Los automáticos se
+    proyectan 5 años hacia adelante en vez de 2.
 - Marcar pagado / pendiente por gasto.
 - **Replicar al mes siguiente**: desde el menú (…) de cualquier gasto (no
   cuotas), "Replicar al mes siguiente" copia ese gasto puntual al mes que

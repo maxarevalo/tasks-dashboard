@@ -7,7 +7,12 @@ import {
   FixedExpense,
   EXPENSE_CATEGORIES,
 } from "@/models/gastos";
-import { addMonths, periodInRange, type Period } from "@/lib/period";
+import {
+  addMonths,
+  periodInRange,
+  periodMatchesCadence,
+  type Period,
+} from "@/lib/period";
 import type { Currency } from "@/lib/money";
 import {
   CATEGORY_ORDER,
@@ -96,6 +101,7 @@ function mapFixed(doc: Lean, cardName: string | null): FixedExpenseDTO {
     startPeriod: str(doc.startPeriod),
     endPeriod: (doc.endPeriod as string) ?? null,
     active: Boolean(doc.active),
+    frequency: (doc.frequency as FixedExpenseDTO["frequency"]) ?? "monthly",
     autoGenerate: Boolean(doc.autoGenerate),
     skipPeriods: Array.isArray(doc.skipPeriods)
       ? (doc.skipPeriods as string[])
@@ -162,7 +168,7 @@ export async function getProjectedExpenseTotals(
       .select("period amount currency fixedId")
       .lean(),
     FixedExpense.find({ userId: uid, active: true })
-      .select("amount currency startPeriod endPeriod skipPeriods")
+      .select("amount currency startPeriod endPeriod skipPeriods frequency")
       .lean(),
   ]);
 
@@ -182,7 +188,9 @@ export async function getProjectedExpenseTotals(
       const skips = Array.isArray(f.skipPeriods)
         ? (f.skipPeriods as string[])
         : [];
+      const freq = (f.frequency as "monthly" | "annual") ?? "monthly";
       if (p < start || (end && p > end) || skips.includes(p)) continue;
+      if (!periodMatchesCadence(start, p, freq)) continue;
       if (materialized.has(`${p}|${String(f._id)}`)) continue;
       const cur = (f.currency as "ARS" | "USD") ?? "ARS";
       result[p][cur] += (f.amount as number) ?? 0;
@@ -227,7 +235,7 @@ export async function getExpenseMatrix(
     getCards(true),
     FixedExpense.find({ userId: uid, active: true, currency })
       .select(
-        "description category cardId amount startPeriod endPeriod skipPeriods",
+        "description category cardId amount startPeriod endPeriod skipPeriods frequency",
       )
       .lean(),
   ]);
@@ -285,11 +293,13 @@ export async function getExpenseMatrix(
       : [];
     const cardId = f.cardId ? String(f.cardId) : null;
     const amount = (f.amount as number) ?? 0;
+    const freq = (f.frequency as "monthly" | "annual") ?? "monthly";
     for (const p of periods) {
       if (
         !periodInRange(p, String(f.startPeriod), (f.endPeriod as string) ?? null)
       )
         continue;
+      if (!periodMatchesCadence(String(f.startPeriod), p, freq)) continue;
       if (skips.includes(p)) continue;
       if (materialized.has(`${p}|${String(f._id)}`)) continue;
       const row = rowFor(
@@ -406,6 +416,11 @@ export async function getMonthData(period: Period): Promise<MonthData> {
         String(f.startPeriod),
         (f.endPeriod as string) ?? null,
       ) &&
+      periodMatchesCadence(
+        String(f.startPeriod),
+        period,
+        (f.frequency as "monthly" | "annual") ?? "monthly",
+      ) &&
       !(Array.isArray(f.skipPeriods) && f.skipPeriods.includes(period)) &&
       !materializedFixedIds.has(String(f._id)) &&
       !thisMonthSignatures.has(
@@ -444,6 +459,7 @@ export async function getMonthData(period: Period): Promise<MonthData> {
       cardName: f.cardId
         ? (cardName.get(String(f.cardId)) ?? null)
         : null,
+      frequency: (f.frequency as "monthly" | "annual") ?? "monthly",
     }));
 
   return {

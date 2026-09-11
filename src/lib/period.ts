@@ -43,6 +43,28 @@ export function periodInRange(
   return period >= start && (!end || period <= end);
 }
 
+/** Cantidad de meses entre `a` y `b` (b - a). Puede ser negativo. */
+export function monthsBetween(a: Period, b: Period): number {
+  const [ay, am] = parts(a);
+  const [by, bm] = parts(b);
+  return (by - ay) * 12 + (bm - am);
+}
+
+/**
+ * true si `period` corresponde a una ocurrencia de una recurrencia que
+ * empieza en `start`: todos los meses si es "monthly", o cada 12 meses
+ * (mismo mes calendario que `start`) si es "annual".
+ */
+export function periodMatchesCadence(
+  start: Period,
+  period: Period,
+  frequency: "monthly" | "annual" = "monthly",
+): boolean {
+  if (period < start) return false;
+  if (frequency === "annual") return monthsBetween(start, period) % 12 === 0;
+  return true;
+}
+
 export function periodLabel(period: Period): string {
   const [y, m] = parts(period);
   const label = new Intl.DateTimeFormat("es-AR", {
