@@ -27,6 +27,7 @@ import {
   replicateExpense,
   setTagBudget,
   deleteTagBudget,
+  replicateTagBudget,
 } from "@/features/gastos/actions";
 import {
   CATEGORY_LABELS,
@@ -499,6 +500,25 @@ function BudgetRow({
   const pct = b.amount > 0 ? Math.min(100, (b.spent / b.amount) * 100) : 0;
   const over = b.remaining < 0;
 
+  const menuItems: RowMenuItem[] = [
+    {
+      label: "Editar",
+      icon: <Pencil className="h-3.5 w-3.5" />,
+      onClick: onEdit,
+    },
+    ...[1, 3, 6, 12].map((n) => ({
+      label: `Replicar ${n} mes${n > 1 ? "es" : ""} siguiente${n > 1 ? "s" : ""}`,
+      icon: <CopyPlus className="h-3.5 w-3.5" />,
+      onClick: () => exec(() => replicateTagBudget(b.id, n)),
+    })),
+    {
+      label: "Borrar",
+      icon: <Trash2 className="h-3.5 w-3.5" />,
+      danger: true,
+      onClick: () => exec(() => deleteTagBudget(b.id)),
+    },
+  ];
+
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <span className="text-lg leading-none" title={b.tag}>
@@ -530,24 +550,9 @@ function BudgetRow({
           {over ? "excedido" : "disponible"}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-          aria-label="Editar presupuesto"
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => exec(() => deleteTagBudget(b.id))}
-          className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
-          aria-label="Borrar presupuesto"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+      <div className="shrink-0">
+        <RowMenu items={menuItems} />
+        {pending && <span className="sr-only">Guardando…</span>}
       </div>
     </li>
   );

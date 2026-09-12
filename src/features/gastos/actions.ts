@@ -790,3 +790,33 @@ export async function deleteTagBudget(id: string): Promise<ActionResult> {
     await Budget.deleteOne({ _id: id, userId: uid });
   });
 }
+
+const REPLICATE_MONTHS = [1, 3, 6, 12] as const;
+
+/** Copia un presupuesto a los próximos N meses (mismo monto, por etiqueta+moneda). */
+export async function replicateTagBudget(
+  id: string,
+  months: number,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    if (!REPLICATE_MONTHS.includes(months as (typeof REPLICATE_MONTHS)[number])) {
+      throw new Error("Cantidad de meses inválida.");
+    }
+    const doc = await Budget.findOne({ _id: id, userId: uid }).lean();
+    if (!doc) throw new Error("No se encontró el presupuesto.");
+
+    const ops = Array.from({ length: months }, (_, i) => ({
+      updateOne: {
+        filter: {
+          userId: uid,
+          period: addMonths(String(doc.period), i + 1),
+          tag: doc.tag,
+          currency: doc.currency,
+        },
+        update: { $set: { amount: doc.amount } },
+        upsert: true,
+      },
+    }));
+    await Budget.bulkWrite(ops);
+  });
+}
