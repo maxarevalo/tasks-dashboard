@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { Currency } from "@/lib/money";
 
-const HORIZONS = [6, 12, 24];
+const HORIZONS = [3, 6, 12, 24];
 
 export function UnifiedControls({
   currency,

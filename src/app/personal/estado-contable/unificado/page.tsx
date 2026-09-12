@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Layers } from "lucide-react";
+import { Layers, PiggyBank, TrendingUp, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
 import { formatMoney } from "@/lib/money";
 import { periodLabel } from "@/lib/period";
@@ -7,6 +7,7 @@ import {
   getUnifiedOverview,
   getUnifiedProjection,
 } from "@/features/contable/queries";
+import { HORIZONS } from "../_components/horizons";
 import { ProjectionChart } from "../_components/projection-chart";
 import { ProjectionTable } from "../_components/projection-table";
 import { ExchangeRateCard } from "./_components/exchange-rate-card";
@@ -21,7 +22,9 @@ export default async function UnificadoPage({
 }) {
   const { en, h } = await searchParams;
   const displayCurrency = en === "USD" ? "USD" : "ARS";
-  const horizon = [6, 12, 24].includes(Number(h)) ? Number(h) : 12;
+  const horizon = HORIZONS.includes(Number(h) as (typeof HORIZONS)[number])
+    ? Number(h)
+    : 3;
 
   const [overview, { projection }] = await Promise.all([
     getUnifiedOverview(displayCurrency),
@@ -33,19 +36,35 @@ export default async function UnificadoPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/personal/estado-contable"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Volver a estado contable
-      </Link>
-
       <PageHeader
-        title="Vista unificada"
+        title="Estado contable"
         description="Ahorros, ingresos, gastos y proyección con todo convertido a una sola moneda."
         icon={Layers}
       />
+
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href="/personal/estado-contable/ahorros"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <PiggyBank className="h-4 w-4" />
+          Ahorros
+        </Link>
+        <Link
+          href="/personal/estado-contable/ingresos"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <TrendingUp className="h-4 w-4" />
+          Ingresos
+        </Link>
+        <Link
+          href="/personal/estado-contable/detalle"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <Wallet className="h-4 w-4" />
+          Detalle por moneda
+        </Link>
+      </div>
 
       <ExchangeRateCard rate={overview.rate} />
 
