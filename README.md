@@ -78,6 +78,9 @@ activo), `src/features/profiles/actions.ts`.
   presupuesto por etiqueta+moneda por mes (se puede editar el monto; para
   cambiar la etiqueta hay que borrar y crear uno nuevo). Modelo `Budget` en
   `src/models/gastos.ts`.
+  - **Replicar presupuesto**: desde el menú (…) de un presupuesto, "Replicar
+    1/3/6/12 meses siguientes" lo copia (mismo monto) a esos meses que
+    vienen, creando o actualizando el presupuesto de cada uno.
 - **Replicar al mes siguiente**: desde el menú (…) de cualquier gasto (no
   cuotas), "Replicar al mes siguiente" copia ese gasto puntual al mes que
   viene (no duplica si ya hay uno con la misma descripción/tarjeta ahí). Si el
@@ -149,6 +152,10 @@ tabs "Ahorros" / "Ingresos" / "Detalle por moneda" llevan al resto.
   Cada mes muestra ingresos, gastos (materializados + fijos que van a caer),
   neto, rendimiento y **saldo acumulado**. Gráfico de línea + tabla, marca
   cuándo el saldo se vuelve negativo.
+  - **Línea "Ahorro real"**: paralela a la de "Saldo" (línea punteada), es el
+    saldo proyectado menos el total de plazos fijos de PF Dardo de hoy — el
+    mismo ajuste que "Ahorros REALES", constante a lo largo de todo el
+    horizonte (no es una proyección independiente de los plazos fijos).
 - **Disponible en el mes** = ahorros totales + ingresos − gastos del mes.
 - **Vista unificada** (`/personal/estado-contable/unificado`, **vista por
   defecto** de este módulo): todo convertido a **una sola moneda** (elegís

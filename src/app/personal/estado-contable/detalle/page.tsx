@@ -208,6 +208,10 @@ export default async function DetallePage({
                 currency={p.currency}
                 startingBalance={p.startingBalance}
                 months={p.months}
+                realOffset={
+                  overview.savingsTotal[p.currency] -
+                  overview.savingsRealTotal[p.currency]
+                }
               />
               <ProjectionTable data={p} />
             </div>

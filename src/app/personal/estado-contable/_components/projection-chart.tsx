@@ -14,14 +14,23 @@ export function ProjectionChart({
   currency,
   startingBalance,
   months,
+  realOffset,
 }: {
   title: string;
   currency: Currency;
   startingBalance: number;
   months: ProjectionMonth[];
+  /**
+   * Si se pasa, dibuja una segunda línea paralela "Ahorro real" = saldo -
+   * realOffset (ej. el total de plazos fijos de PF Dardo hoy). Se mantiene
+   * constante a lo largo de toda la proyección: es una comparación visual
+   * rápida, no una proyección independiente.
+   */
+  realOffset?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const showReal = realOffset != null && realOffset !== 0;
 
   const points = [
     { label: "hoy", balance: startingBalance, month: null as ProjectionMonth | null },
@@ -33,6 +42,7 @@ export function ProjectionChart({
   ];
 
   const values = points.map((p) => p.balance);
+  if (showReal) values.push(...points.map((p) => p.balance - realOffset));
   const rawMin = Math.min(0, ...values);
   const rawMax = Math.max(0, ...values);
   const span = rawMax - rawMin || 1;
@@ -51,6 +61,11 @@ export function ProjectionChart({
     .join(" ");
   const areaPath =
     `${linePath} L ${x(points.length - 1)} ${y(min)} L ${x(0)} ${y(min)} Z`;
+  const realLinePath = showReal
+    ? points
+        .map((p, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(p.balance - realOffset)}`)
+        .join(" ")
+    : "";
 
   const zeroY = y(0);
   const showZero = 0 >= min && 0 <= max;
@@ -80,8 +95,20 @@ export function ProjectionChart({
 
   return (
     <figure className="rounded-xl border border-slate-200 bg-white p-4">
-      <figcaption className="mb-1 text-sm font-semibold text-slate-900">
+      <figcaption className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-slate-900">
         {title}
+        {showReal && (
+          <span className="flex items-center gap-3 text-xs font-normal text-slate-500">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-0.5 w-3 rounded-full bg-[#0f766e]" />
+              Saldo
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-0.5 w-3 rounded-full border-t-2 border-dashed border-[#d97706]" />
+              Ahorro real
+            </span>
+          </span>
+        )}
       </figcaption>
       <div
         ref={wrapRef}
@@ -139,6 +166,17 @@ export function ProjectionChart({
             strokeLinejoin="round"
             strokeLinecap="round"
           />
+          {showReal && (
+            <path
+              d={realLinePath}
+              fill="none"
+              stroke="#d97706"
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          )}
 
           {xTicks.map((i) => (
             <text
@@ -171,6 +209,16 @@ export function ProjectionChart({
                 stroke="#fff"
                 strokeWidth={2}
               />
+              {showReal && (
+                <circle
+                  cx={x(hover!)}
+                  cy={y(hp.balance - realOffset)}
+                  r={4.5}
+                  fill="#d97706"
+                  stroke="#fff"
+                  strokeWidth={2}
+                />
+              )}
             </>
           )}
 
@@ -185,6 +233,18 @@ export function ProjectionChart({
           >
             {compact(points[points.length - 1].balance, currency)}
           </text>
+          {showReal && (
+            <text
+              x={x(points.length - 1)}
+              y={y(points[points.length - 1].balance - realOffset) + 14}
+              textAnchor="end"
+              fill="#d97706"
+              fontSize={11}
+              fontWeight={600}
+            >
+              {compact(points[points.length - 1].balance - realOffset, currency)}
+            </text>
+          )}
         </svg>
 
         {hp && (
@@ -205,6 +265,11 @@ export function ProjectionChart({
             <p className="text-slate-600">
               Saldo: {formatMoney(hp.balance, currency)}
             </p>
+            {showReal && (
+              <p className="text-amber-700">
+                Ahorro real: {formatMoney(hp.balance - realOffset, currency)}
+              </p>
+            )}
             {hp.month && (
               <>
                 <p className="text-emerald-700">

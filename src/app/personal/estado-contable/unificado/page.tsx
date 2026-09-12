@@ -134,6 +134,7 @@ export default async function UnificadoPage({
               currency={displayCurrency}
               startingBalance={projection.startingBalance}
               months={projection.months}
+              realOffset={overview.savingsTotal - overview.savingsRealTotal}
             />
             <ProjectionTable
               data={{
