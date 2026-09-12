@@ -12,23 +12,30 @@ import {
   addMonths,
   periodInRange,
   periodMatchesCadence,
+  periodRange,
   type Period,
   type RecurrenceFrequency,
 } from "@/lib/period";
 import type { Currency } from "@/lib/money";
 import { convertAmount } from "@/lib/exchange";
+import { EXPENSE_TAG_ICONS } from "@/lib/tags";
 import {
+  CATEGORY_LABELS,
   CATEGORY_ORDER,
   type BudgetDTO,
   type CardDTO,
+  type ComparisonRow,
   type ExpenseDTO,
   type ExpenseCategory,
   type ExpenseMatrix,
+  type ExpenseTag,
   type FixedExpenseDTO,
   type MatrixCell,
   type MatrixRow,
   type MonthData,
+  type MonthlyComparison,
   type MonthSummary,
+  type TrendPoint,
 } from "./types";
 
 type Lean = Record<string, unknown>;
@@ -569,4 +576,138 @@ export async function getMonthData(period: Period): Promise<MonthData> {
     notContinuingNextMonth,
     budgets,
   };
+}
+
+/* ------------------------------ Estadísticas ---------------------------- */
+
+const SIN_TARJETA_KEY = "__sin_tarjeta__";
+
+function zeroCurrency(): Record<Currency, number> {
+  return { ARS: 0, USD: 0 };
+}
+
+/**
+ * Agrupa `docs` (gastos de `period` y `previousPeriod`, ya filtrados) según
+ * `keyOf`; descarta los que devuelven `null` (ej. sin etiqueta) y las filas
+ * que terminan en cero en ambos meses. Ordenado por el total del mes actual.
+ */
+function buildComparisonRows(
+  docs: Lean[],
+  period: Period,
+  keyOf: (d: Lean) => string | null,
+  labelOf: (key: string) => string,
+  iconOf?: (key: string) => string | null,
+): ComparisonRow[] {
+  const map = new Map<string, ComparisonRow>();
+  for (const d of docs) {
+    const key = keyOf(d);
+    if (key == null) continue;
+    const row =
+      map.get(key) ??
+      ({
+        key,
+        label: labelOf(key),
+        icon: iconOf ? iconOf(key) : null,
+        current: zeroCurrency(),
+        previous: zeroCurrency(),
+      } satisfies ComparisonRow);
+    const bucket = d.period === period ? row.current : row.previous;
+    bucket[d.currency as Currency] += (d.amount as number) ?? 0;
+    map.set(key, row);
+  }
+  return [...map.values()]
+    .filter(
+      (r) => r.current.ARS || r.current.USD || r.previous.ARS || r.previous.USD,
+    )
+    .sort(
+      (a, b) => b.current.ARS + b.current.USD - (a.current.ARS + a.current.USD),
+    );
+}
+
+/**
+ * Compara `period` contra el mes anterior: totales por categoría, tarjeta y
+ * etiqueta, para ver diferencia de monto y porcentaje en Estadísticas.
+ */
+export async function getMonthlyComparison(
+  period: Period,
+): Promise<MonthlyComparison> {
+  await connectToDatabase();
+  const uid = await getActiveProfileKey();
+  const previousPeriod = addMonths(period, -1);
+
+  const [cards, docs] = await Promise.all([
+    getCards(true),
+    Expense.find({ userId: uid, period: { $in: [period, previousPeriod] } })
+      .select("period category amount currency cardId tag")
+      .lean(),
+  ]);
+
+  const cardName = new Map(cards.map((c) => [c.id, c.name]));
+  const lean = docs as Lean[];
+
+  const byCategory = buildComparisonRows(
+    lean,
+    period,
+    (d) => (d.category as string) ?? null,
+    (k) => CATEGORY_LABELS[k as ExpenseCategory] ?? k,
+  );
+
+  const byCard = buildComparisonRows(
+    lean,
+    period,
+    (d) => (d.cardId ? String(d.cardId) : SIN_TARJETA_KEY),
+    (k) =>
+      k === SIN_TARJETA_KEY
+        ? "Sin tarjeta"
+        : (cardName.get(k) ?? "Tarjeta eliminada"),
+  );
+
+  const byTag = buildComparisonRows(
+    lean,
+    period,
+    (d) => (d.tag ? String(d.tag) : null),
+    (k) => k,
+    (k) => EXPENSE_TAG_ICONS[k as ExpenseTag] ?? null,
+  );
+
+  const totalCurrent = zeroCurrency();
+  const totalPrevious = zeroCurrency();
+  for (const d of lean) {
+    const bucket = d.period === period ? totalCurrent : totalPrevious;
+    bucket[d.currency as Currency] += (d.amount as number) ?? 0;
+  }
+
+  return {
+    period,
+    previousPeriod,
+    totalCurrent,
+    totalPrevious,
+    byCategory,
+    byCard,
+    byTag,
+  };
+}
+
+/** Total de gastos cargados por mes, para los últimos `months` meses (incluye `period`). */
+export async function getSpendingTrend(
+  period: Period,
+  months: number,
+): Promise<TrendPoint[]> {
+  await connectToDatabase();
+  const uid = await getActiveProfileKey();
+  const start = addMonths(period, -(months - 1));
+  const periods = periodRange(start, months);
+
+  const docs = await Expense.find({ userId: uid, period: { $in: periods } })
+    .select("period amount currency")
+    .lean();
+
+  const totals = new Map<Period, Record<Currency, number>>(
+    periods.map((p) => [p, zeroCurrency()]),
+  );
+  for (const d of docs) {
+    const t = totals.get(String(d.period));
+    if (t) t[d.currency as Currency] += (d.amount as number) ?? 0;
+  }
+  return periods.map((p) => ({ period: p, total: totals.get(p)! }));
 }

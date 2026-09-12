@@ -4,9 +4,15 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { addMonths, currentPeriod, periodLabel, type Period } from "@/lib/period";
 
-export function MonthNav({ period }: { period: Period }) {
+export function MonthNav({
+  period,
+  basePath = "/personal/gastos",
+}: {
+  period: Period;
+  basePath?: string;
+}) {
   const router = useRouter();
-  const go = (p: Period) => router.push(`/personal/gastos?mes=${p}`);
+  const go = (p: Period) => router.push(`${basePath}?mes=${p}`);
   const isCurrent = period === currentPeriod();
 
   return (

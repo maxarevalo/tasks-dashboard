@@ -9,6 +9,7 @@ import {
   CreditCard,
   Repeat,
   Landmark,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,7 +23,8 @@ export type IconName =
   | "receipt"
   | "credit-card"
   | "repeat"
-  | "landmark";
+  | "landmark"
+  | "bar-chart-3";
 
 export const iconMap: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -35,4 +37,5 @@ export const iconMap: Record<IconName, LucideIcon> = {
   "credit-card": CreditCard,
   repeat: Repeat,
   landmark: Landmark,
+  "bar-chart-3": BarChart3,
 };

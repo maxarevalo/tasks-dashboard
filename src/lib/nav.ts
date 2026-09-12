@@ -31,6 +31,7 @@ export const sections: Record<Section["key"], Section> = {
       { label: "Gastos mensuales", href: "/personal/gastos", icon: "receipt" },
       { label: "Estado contable", href: "/personal/estado-contable", icon: "wallet" },
       { label: "PF Dardo", href: "/personal/pf-dardo", icon: "landmark" },
+      { label: "Estadísticas", href: "/personal/estadisticas", icon: "bar-chart-3" },
       { label: "Tareas pendientes", href: "/personal/tareas", icon: "list-checks" },
     ],
   },

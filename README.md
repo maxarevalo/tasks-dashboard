@@ -206,6 +206,26 @@ embebidos y `renewedFromId`/`renewed` para la cadena de renovaciones),
 `src/lib/pf.ts` (matemática pura: fechas e interés prorrateado, libre de
 mongoose), `src/features/pf-dardo/` (queries, actions, types).
 
+### Módulo: Estadísticas (`/personal/estadisticas`)
+
+Análisis de gastos: comparación mes a mes y evolución. Navegación por mes
+(igual que Gastos mensuales, componente `MonthNav` ahora compartido).
+
+- **Evolución de gastos totales**: barras con el total cargado (ARS) de los
+  últimos 6 meses, para ver la tendencia de un vistazo.
+- **Gastos mensuales por categoría / por tarjeta / por etiqueta**: mismo
+  formato en las tres — para cada concepto (categoría, tarjeta o etiqueta)
+  se muestra el total de este mes, el del mes anterior, y la diferencia en
+  monto y porcentaje (rojo si se gastó más, verde si menos; "nuevo" cuando
+  el mes anterior no tenía nada). "Por tarjeta" agrupa **todos** los gastos
+  con esa tarjeta sin importar su categoría (igual que en el Detalle de
+  Gastos); "por etiqueta" solo incluye gastos que tengan una etiqueta
+  asignada.
+
+Código: `getMonthlyComparison` y `getSpendingTrend` en
+`src/features/gastos/queries.ts`, tipos `MonthlyComparison`/`ComparisonRow`/
+`TrendPoint` en `src/features/gastos/types.ts`.
+
 ## Estructura
 
 ```
@@ -226,6 +246,7 @@ src/
     dashboard-shell.tsx       Layout responsive (sidebar + topbar + drawer mobile)
     ui.tsx / modal.tsx        Inputs, botones, modal
     page-parts.tsx            PageHeader, Card, ComingSoon
+    month-nav.tsx             Navegación de mes (‹ mes › ), con `basePath` por módulo
   app/
     login/                    Pantalla de ingreso
     hub/                      Selector Personal / Trabajo

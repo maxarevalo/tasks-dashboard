@@ -98,6 +98,32 @@ export type BudgetDTO = {
   remaining: number;
 };
 
+/* ------------------------------ Estadísticas ---------------------------- */
+
+export type ComparisonRow = {
+  key: string;
+  label: string;
+  /** Solo para el desglose por etiqueta. */
+  icon: string | null;
+  current: Record<Currency, number>;
+  previous: Record<Currency, number>;
+};
+
+export type MonthlyComparison = {
+  period: Period;
+  previousPeriod: Period;
+  totalCurrent: Record<Currency, number>;
+  totalPrevious: Record<Currency, number>;
+  byCategory: ComparisonRow[];
+  byCard: ComparisonRow[];
+  byTag: ComparisonRow[];
+};
+
+export type TrendPoint = {
+  period: Period;
+  total: Record<Currency, number>;
+};
+
 export type MonthData = {
   period: Period;
   expenses: ExpenseDTO[];

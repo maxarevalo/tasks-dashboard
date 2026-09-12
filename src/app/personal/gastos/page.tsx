@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { CreditCard, Repeat, Receipt, CalendarX, Table2 } from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
+import { MonthNav } from "@/components/month-nav";
 import { normalizePeriod, addMonths, periodLabel } from "@/lib/period";
 import { getMonthData } from "@/features/gastos/queries";
-import { MonthNav } from "./_components/month-nav";
 import { Summary } from "./_components/summary";
 import { ExpensesPanel } from "./_components/expenses-panel";
 import { GenerateFixedButton } from "./_components/generate-fixed-button";
