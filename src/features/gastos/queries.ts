@@ -5,6 +5,7 @@ import {
   Card,
   Expense,
   FixedExpense,
+  Budget,
   EXPENSE_CATEGORIES,
 } from "@/models/gastos";
 import {
@@ -18,6 +19,7 @@ import type { Currency } from "@/lib/money";
 import { convertAmount } from "@/lib/exchange";
 import {
   CATEGORY_ORDER,
+  type BudgetDTO,
   type CardDTO,
   type ExpenseDTO,
   type ExpenseCategory,
@@ -429,14 +431,16 @@ export async function getMonthData(period: Period): Promise<MonthData> {
 
   const nextPeriod = addMonths(period, 1);
 
-  const [expenseDocs, cards, fixedDocs, nextExpenseDocs] = await Promise.all([
-    Expense.find({ userId: uid, period }).sort({ createdAt: 1 }).lean(),
-    getCards(true),
-    FixedExpense.find({ userId: uid }).lean(),
-    Expense.find({ userId: uid, period: nextPeriod, source: { $ne: "installment" } })
-      .select("category description currency cardId")
-      .lean(),
-  ]);
+  const [expenseDocs, cards, fixedDocs, nextExpenseDocs, budgetDocs] =
+    await Promise.all([
+      Expense.find({ userId: uid, period }).sort({ createdAt: 1 }).lean(),
+      getCards(true),
+      FixedExpense.find({ userId: uid }).lean(),
+      Expense.find({ userId: uid, period: nextPeriod, source: { $ne: "installment" } })
+        .select("category description currency cardId")
+        .lean(),
+      Budget.find({ userId: uid, period }).lean(),
+    ]);
 
   const cardName = new Map(cards.map((c) => [c.id, c.name]));
   const fixedById = new Map(fixedDocs.map((f) => [String(f._id), f]));
@@ -536,6 +540,24 @@ export async function getMonthData(period: Period): Promise<MonthData> {
       frequency: (f.frequency as RecurrenceFrequency) ?? "monthly",
     }));
 
+  const budgets: BudgetDTO[] = budgetDocs.map((d) => {
+    const tag = d.tag as BudgetDTO["tag"];
+    const currency = d.currency as BudgetDTO["currency"];
+    const amount = (d.amount as number) ?? 0;
+    const spent = expenses
+      .filter((e) => e.tag === tag && e.currency === currency)
+      .reduce((s, e) => s + e.amount, 0);
+    return {
+      id: String(d._id),
+      period,
+      tag,
+      currency,
+      amount,
+      spent,
+      remaining: amount - spent,
+    };
+  });
+
   return {
     period,
     expenses,
@@ -545,5 +567,6 @@ export async function getMonthData(period: Period): Promise<MonthData> {
     pendingManualFixed,
     pendingAutoFixedCount: pending.filter((f) => f.autoGenerate).length,
     notContinuingNextMonth,
+    budgets,
   };
 }

@@ -89,6 +89,7 @@ export default async function GastosPage({
         expenses={data.expenses}
         cards={data.cards}
         fixedTemplates={data.fixedTemplates}
+        budgets={data.budgets}
       />
     </div>
   );

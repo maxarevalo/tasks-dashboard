@@ -13,26 +13,32 @@ import {
   ClipboardPaste,
   CopyPlus,
   CopyCheck,
+  Target,
 } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button, Field, Input, Select, ErrorText } from "@/components/ui";
+import { Modal } from "@/components/modal";
 import { RowMenu, type RowMenuItem } from "@/components/row-menu";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, type Currency } from "@/lib/money";
 import { useAction } from "@/features/gastos/use-action";
 import {
   setExpensePaid,
   deleteExpense,
   skipFixedForPeriod,
   replicateExpense,
+  setTagBudget,
+  deleteTagBudget,
 } from "@/features/gastos/actions";
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
+  type BudgetDTO,
   type CardDTO,
   type ExpenseDTO,
+  type ExpenseTag,
   type FixedExpenseDTO,
 } from "@/features/gastos/types";
 import { periodLabel, addMonths, type Period } from "@/lib/period";
-import { EXPENSE_TAG_ICONS } from "@/lib/tags";
+import { EXPENSE_TAGS, EXPENSE_TAG_ICONS } from "@/lib/tags";
 import { ExpenseForm } from "./expense-form";
 import { FixedForm } from "./fixed-form";
 import { BulkImport } from "./bulk-import";
@@ -43,27 +49,35 @@ export function ExpensesPanel({
   expenses,
   cards,
   fixedTemplates,
+  budgets,
 }: {
   period: Period;
   expenses: ExpenseDTO[];
   cards: CardDTO[];
   fixedTemplates: FixedExpenseDTO[];
+  budgets: BudgetDTO[];
 }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
   const [fixedEditing, setFixedEditing] = useState<FixedExpenseDTO | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [replicateOpen, setReplicateOpen] = useState(false);
+  const [budgetFormOpen, setBudgetFormOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<BudgetDTO | null>(null);
 
   const openNew = () => {
     setEditing(null);
     setFormOpen(true);
   };
 
-  const grouped = CATEGORY_ORDER.map((cat) => ({
-    cat,
-    items: expenses.filter((e) => e.category === cat),
-  })).filter((g) => g.items.length > 0);
+  const grouped = CATEGORY_ORDER.filter((cat) => cat !== "previsto")
+    .map((cat) => ({
+      cat,
+      items: expenses.filter((e) => e.category === cat),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  const previstoItems = expenses.filter((e) => e.category === "previsto");
 
   const cardOrder = new Map(cards.map((c, i) => [c.id, i]));
 
@@ -71,6 +85,18 @@ export function ExpensesPanel({
     (e) => e.source !== "installment" && !e.replicatedNextMonth,
   );
   const nextLabel = periodLabel(addMonths(period, 1));
+
+  const onEdit = (e: ExpenseDTO) => {
+    setEditing(e);
+    setFormOpen(true);
+  };
+  const onEditFixed = (e: ExpenseDTO) => {
+    const t = fixedTemplates.find((f) => f.id === e.fixedId);
+    if (t) setFixedEditing(t);
+  };
+
+  const hasNothing =
+    grouped.length === 0 && previstoItems.length === 0 && budgets.length === 0;
 
   return (
     <div className="space-y-4">
@@ -90,6 +116,16 @@ export function ExpensesPanel({
             <ClipboardPaste className="h-4 w-4" />
             Importar
           </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setEditingBudget(null);
+              setBudgetFormOpen(true);
+            }}
+          >
+            <Target className="h-4 w-4" />
+            Presupuesto por etiqueta
+          </Button>
           <Button onClick={openNew}>
             <Plus className="h-4 w-4" />
             Agregar gasto
@@ -97,47 +133,119 @@ export function ExpensesPanel({
         </div>
       </div>
 
-      {grouped.length === 0 ? (
+      {hasNothing ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
           No hay gastos cargados en este mes.
         </div>
       ) : (
-        grouped.map(({ cat, items }) => {
-          const cardGroups = groupByCard(items, cardOrder);
-          const onEdit = (e: ExpenseDTO) => {
-            setEditing(e);
-            setFormOpen(true);
-          };
-          const onEditFixed = (e: ExpenseDTO) => {
-            const t = fixedTemplates.find((f) => f.id === e.fixedId);
-            if (t) setFixedEditing(t);
-          };
+        <>
+          {grouped.map(({ cat, items }) => {
+            const cardGroups = groupByCard(items, cardOrder);
 
-          return (
-            <section
-              key={cat}
-              className="overflow-hidden rounded-xl border border-slate-200 bg-white"
-            >
+            return (
+              <section
+                key={cat}
+                className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+              >
+                <header className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {CATEGORY_LABELS[cat]}
+                </header>
+
+                {cardGroups.length > 1 ? (
+                  cardGroups.map((g) => (
+                    <div key={g.key} className="border-b border-slate-100 last:border-0">
+                      <div className="flex items-center justify-between gap-2 bg-slate-50/70 px-4 py-1.5">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                          <CreditCard className="h-3.5 w-3.5" />
+                          {g.cardName ?? "Sin tarjeta"}
+                        </span>
+                        <span className="text-xs font-semibold tabular-nums text-slate-700">
+                          {g.subtotal.ARS !== 0 && formatMoney(g.subtotal.ARS, "ARS")}
+                          {g.subtotal.ARS !== 0 && g.subtotal.USD !== 0 ? " · " : ""}
+                          {g.subtotal.USD !== 0 && formatMoney(g.subtotal.USD, "USD")}
+                        </span>
+                      </div>
+                      <ul className="divide-y divide-slate-100">
+                        {g.items.map((e) => (
+                          <ExpenseRow
+                            key={e.id}
+                            expense={e}
+                            onEdit={() => onEdit(e)}
+                            onEditFixed={() => onEditFixed(e)}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  ))
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {items.map((e) => (
+                      <ExpenseRow
+                        key={e.id}
+                        expense={e}
+                        onEdit={() => onEdit(e)}
+                        onEditFixed={() => onEditFixed(e)}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
+
+          {(previstoItems.length > 0 || budgets.length > 0) && (
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <header className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {CATEGORY_LABELS[cat]}
+                {CATEGORY_LABELS.previsto}
               </header>
 
-              {cardGroups.length > 1 ? (
-                cardGroups.map((g) => (
-                  <div key={g.key} className="border-b border-slate-100 last:border-0">
-                    <div className="flex items-center justify-between gap-2 bg-slate-50/70 px-4 py-1.5">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                        <CreditCard className="h-3.5 w-3.5" />
-                        {g.cardName ?? "Sin tarjeta"}
-                      </span>
-                      <span className="text-xs font-semibold tabular-nums text-slate-700">
-                        {g.subtotal.ARS !== 0 && formatMoney(g.subtotal.ARS, "ARS")}
-                        {g.subtotal.ARS !== 0 && g.subtotal.USD !== 0 ? " · " : ""}
-                        {g.subtotal.USD !== 0 && formatMoney(g.subtotal.USD, "USD")}
-                      </span>
-                    </div>
+              {budgets.length > 0 && (
+                <ul className="divide-y divide-slate-100 border-b border-slate-100">
+                  {budgets.map((b) => (
+                    <BudgetRow
+                      key={b.id}
+                      budget={b}
+                      onEdit={() => {
+                        setEditingBudget(b);
+                        setBudgetFormOpen(true);
+                      }}
+                    />
+                  ))}
+                </ul>
+              )}
+
+              {previstoItems.length > 0 &&
+                (() => {
+                  const cardGroups = groupByCard(previstoItems, cardOrder);
+                  return cardGroups.length > 1 ? (
+                    cardGroups.map((g) => (
+                      <div key={g.key} className="border-b border-slate-100 last:border-0">
+                        <div className="flex items-center justify-between gap-2 bg-slate-50/70 px-4 py-1.5">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                            <CreditCard className="h-3.5 w-3.5" />
+                            {g.cardName ?? "Sin tarjeta"}
+                          </span>
+                          <span className="text-xs font-semibold tabular-nums text-slate-700">
+                            {g.subtotal.ARS !== 0 && formatMoney(g.subtotal.ARS, "ARS")}
+                            {g.subtotal.ARS !== 0 && g.subtotal.USD !== 0 ? " · " : ""}
+                            {g.subtotal.USD !== 0 && formatMoney(g.subtotal.USD, "USD")}
+                          </span>
+                        </div>
+                        <ul className="divide-y divide-slate-100">
+                          {g.items.map((e) => (
+                            <ExpenseRow
+                              key={e.id}
+                              expense={e}
+                              onEdit={() => onEdit(e)}
+                              onEditFixed={() => onEditFixed(e)}
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                    ))
+                  ) : (
                     <ul className="divide-y divide-slate-100">
-                      {g.items.map((e) => (
+                      {previstoItems.map((e) => (
                         <ExpenseRow
                           key={e.id}
                           expense={e}
@@ -146,23 +254,11 @@ export function ExpensesPanel({
                         />
                       ))}
                     </ul>
-                  </div>
-                ))
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {items.map((e) => (
-                    <ExpenseRow
-                      key={e.id}
-                      expense={e}
-                      onEdit={() => onEdit(e)}
-                      onEditFixed={() => onEditFixed(e)}
-                    />
-                  ))}
-                </ul>
-              )}
+                  );
+                })()}
             </section>
-          );
-        })
+          )}
+        </>
       )}
 
       <ExpenseForm
@@ -193,6 +289,13 @@ export function ExpensesPanel({
         onClose={() => setReplicateOpen(false)}
         nextLabel={nextLabel}
         items={replicableExpenses}
+      />
+
+      <BudgetForm
+        open={budgetFormOpen}
+        onClose={() => setBudgetFormOpen(false)}
+        period={period}
+        editing={editingBudget}
       />
     </div>
   );
@@ -382,5 +485,172 @@ function ExpenseRow({
         <RowMenu items={menuItems} />
       </div>
     </li>
+  );
+}
+
+function BudgetRow({
+  budget: b,
+  onEdit,
+}: {
+  budget: BudgetDTO;
+  onEdit: () => void;
+}) {
+  const { pending, exec } = useAction();
+  const pct = b.amount > 0 ? Math.min(100, (b.spent / b.amount) * 100) : 0;
+  const over = b.remaining < 0;
+
+  return (
+    <li className="flex items-center gap-3 px-4 py-3">
+      <span className="text-lg leading-none" title={b.tag}>
+        {EXPENSE_TAG_ICONS[b.tag]}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-slate-900">{b.tag}</p>
+        <div className="mt-1.5 h-1.5 w-full max-w-[240px] overflow-hidden rounded-full bg-slate-100">
+          <div
+            className={`h-full rounded-full ${over ? "bg-red-500" : "bg-emerald-500"}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="mt-1 text-xs text-slate-500">
+          Gastado {formatMoney(b.spent, b.currency)} de{" "}
+          {formatMoney(b.amount, b.currency)}
+        </p>
+      </div>
+      <div className="shrink-0 text-right">
+        <p
+          className={`text-sm font-semibold tabular-nums ${
+            over ? "text-red-600" : "text-emerald-600"
+          }`}
+        >
+          {over ? "-" : ""}
+          {formatMoney(Math.abs(b.remaining), b.currency)}
+        </p>
+        <p className="text-[10px] text-slate-400">
+          {over ? "excedido" : "disponible"}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          aria-label="Editar presupuesto"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => exec(() => deleteTagBudget(b.id))}
+          className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+          aria-label="Borrar presupuesto"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function BudgetForm({
+  open,
+  onClose,
+  period,
+  editing,
+}: {
+  open: boolean;
+  onClose: () => void;
+  period: Period;
+  editing: BudgetDTO | null;
+}) {
+  const { pending, error, exec, setError } = useAction();
+  const [tag, setTag] = useState<ExpenseTag>(EXPENSE_TAGS[0]);
+  const [currency, setCurrency] = useState<Currency>("ARS");
+  const [amount, setAmount] = useState("");
+
+  const [syncedFor, setSyncedFor] = useState<string | null>(null);
+  const key = `${open}-${editing?.id ?? "new"}`;
+  if (open && syncedFor !== key) {
+    setSyncedFor(key);
+    setError(null);
+    setTag(editing?.tag ?? EXPENSE_TAGS[0]);
+    setCurrency(editing?.currency ?? "ARS");
+    setAmount(editing ? String(editing.amount) : "");
+  } else if (!open && syncedFor !== null) {
+    setSyncedFor(null);
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    exec(
+      () =>
+        setTagBudget({ period, tag, currency, amount: Number(amount) }),
+      onClose,
+    );
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={editing ? "Editar presupuesto" : "Nuevo presupuesto por etiqueta"}
+    >
+      <form onSubmit={submit} className="space-y-4">
+        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          Cargá un monto previsto para una etiqueta este mes: se va a ir
+          descontando automáticamente por cada gasto (de cualquier
+          categoría) que cargues con esa misma etiqueta.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Etiqueta">
+            <Select
+              value={tag}
+              onChange={(e) => setTag(e.target.value as ExpenseTag)}
+              disabled={!!editing}
+            >
+              {EXPENSE_TAGS.map((t) => (
+                <option key={t} value={t}>
+                  {EXPENSE_TAG_ICONS[t]} {t}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Moneda">
+            <Select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value as Currency)}
+              disabled={!!editing}
+            >
+              <option value="ARS">ARS</option>
+              <option value="USD">USD</option>
+            </Select>
+          </Field>
+        </div>
+
+        <Field label="Monto previsto">
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+            autoFocus
+          />
+        </Field>
+
+        <ErrorText>{error}</ErrorText>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Guardando…" : "Guardar"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

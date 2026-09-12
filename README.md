@@ -69,6 +69,15 @@ activo), `src/features/profiles/actions.ts`.
   de más de una tarjeta (o sin tarjeta), se subagrupan por tarjeta con su
   propio subtotal por moneda. Si todo es de la misma tarjeta (o ninguna), se
   ve como lista simple, sin el subtotal redundante.
+- **Presupuesto previsto por etiqueta** (botón "Presupuesto por etiqueta"):
+  cargás un monto para una etiqueta en el mes (ej. Combustible: $200.000) y
+  se va descontando solo con cada gasto que cargues con esa misma etiqueta,
+  sin importar su categoría (tarjeta, fijo, etc.) — no hace falta que el
+  gasto sea "previsto". Se muestra en la sección **Previstos** del Detalle,
+  con gastado/disponible y una barra de progreso (roja si se excede). Un
+  presupuesto por etiqueta+moneda por mes (se puede editar el monto; para
+  cambiar la etiqueta hay que borrar y crear uno nuevo). Modelo `Budget` en
+  `src/models/gastos.ts`.
 - **Replicar al mes siguiente**: desde el menú (…) de cualquier gasto (no
   cuotas), "Replicar al mes siguiente" copia ese gasto puntual al mes que
   viene (no duplica si ya hay uno con la misma descripción/tarjeta ahí). Si el
@@ -118,7 +127,9 @@ Código: modelos en `src/models/gastos.ts`, lecturas en
 
 ### Módulo: Estado contable (`/personal/estado-contable`)
 
-Cruza con Gastos para proyectar el saldo.
+Cruza con Gastos para proyectar el saldo. **La vista por defecto es "Vista
+unificada"** (`/unificado`) — la ruta base redirige ahí. Desde ahí, las
+tabs "Ahorros" / "Ingresos" / "Detalle por moneda" llevan al resto.
 
 - **Ahorros** (`/ahorros`): cuentas por **categoría** y **disponibilidad**
   (inmediata / corto plazo / inmovilizada), en ARS o USD, con saldo actual y
@@ -134,17 +145,21 @@ Cruza con Gastos para proyectar el saldo.
   Un ingreso semestral (ej. **aguinaldo/SAC**) se carga una vez, con inicio en
   el primer mes de cobro (ej. junio): se computa automáticamente también 6
   meses después (diciembre) y así sucesivamente, sin duplicar la carga.
-- **Proyección**: horizonte 6/12/24 meses, por moneda. Cada mes muestra
-  ingresos, gastos (materializados + fijos que van a caer), neto, rendimiento y
-  **saldo acumulado**. Gráfico de línea + tabla, marca cuándo el saldo se
-  vuelve negativo.
+- **Proyección**: horizonte **3**/6/12/24 meses (3 por defecto), por moneda.
+  Cada mes muestra ingresos, gastos (materializados + fijos que van a caer),
+  neto, rendimiento y **saldo acumulado**. Gráfico de línea + tabla, marca
+  cuándo el saldo se vuelve negativo.
 - **Disponible en el mes** = ahorros totales + ingresos − gastos del mes.
-- **Vista unificada** (`/personal/estado-contable/unificado`): todo convertido a
-  **una sola moneda** (elegís ARS o USD). Cotización USD/ARS configurable —
-  **a mano** (compra + venta) o **desde API** (dolarapi.com: oficial, blue, MEP,
-  cripto, tarjeta, mayorista) con botón "Actualizar" y auto-refresco si está
-  vieja (>6 h). El valor usado para convertir se elige entre compra, venta o
-  promedio. Helper en `src/lib/exchange.ts`.
+- **Vista unificada** (`/personal/estado-contable/unificado`, **vista por
+  defecto** de este módulo): todo convertido a **una sola moneda** (elegís
+  ARS o USD). Cotización USD/ARS configurable — **a mano** (compra + venta)
+  o **desde API** (dolarapi.com: oficial, blue, MEP, cripto, tarjeta,
+  mayorista) con botón "Actualizar" y auto-refresco si está vieja (>6 h). El
+  valor usado para convertir se elige entre compra, venta o promedio. Helper
+  en `src/lib/exchange.ts`.
+- **Detalle por moneda** (`/personal/estado-contable/detalle`): la vista
+  "clásica" con los mismos números pero separados por ARS/USD sin convertir
+  (antes vivía en la ruta base).
 
 Código: `src/models/contable.ts`, `src/features/contable/` (queries, actions,
 `projection.ts` con la matemática pura), `src/lib/rates.ts`.

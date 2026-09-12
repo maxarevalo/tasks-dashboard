@@ -85,6 +85,19 @@ export type PendingFixedItem = {
   frequency: FixedFrequency;
 };
 
+export type BudgetDTO = {
+  id: string;
+  period: Period;
+  tag: ExpenseTag;
+  currency: Currency;
+  /** Monto previsto. */
+  amount: number;
+  /** Calculado: suma de todos los gastos del mes con esta etiqueta y moneda (cualquier categoría). */
+  spent: number;
+  /** Calculado: amount - spent. */
+  remaining: number;
+};
+
 export type MonthData = {
   period: Period;
   expenses: ExpenseDTO[];
@@ -98,6 +111,8 @@ export type MonthData = {
   pendingAutoFixedCount: number;
   /** Gastos fijos de este mes que NO continúan el mes siguiente. */
   notContinuingNextMonth: { description: string; reason: "ends" | "orphan" }[];
+  /** Presupuestos previstos por etiqueta para este mes. */
+  budgets: BudgetDTO[];
 };
 
 export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {

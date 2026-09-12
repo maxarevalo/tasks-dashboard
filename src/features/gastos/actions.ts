@@ -6,7 +6,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { connectToDatabase } from "@/lib/db";
 import { getActiveProfileKey } from "@/lib/profile";
-import { Card, Expense, FixedExpense } from "@/models/gastos";
+import { Card, Expense, FixedExpense, Budget } from "@/models/gastos";
 import {
   addMonths,
   currentPeriod as currentPeriodValue,
@@ -743,6 +743,7 @@ export async function generateFixedForPeriod(
         amount: t.amount,
         currency: t.currency,
         cardId: t.cardId ?? undefined,
+        tag: t.tag ?? null,
         source: "fixed" as const,
         fixedId: t._id,
       }));
@@ -753,5 +754,39 @@ export async function generateFixedForPeriod(
         if ((e as { code?: number }).code !== 11000) throw e;
       });
     }
+  });
+}
+
+/* -------------------------------- Budget -------------------------------- */
+
+const budgetInput = z.object({
+  period,
+  tag: z.enum(EXPENSE_TAGS),
+  currency,
+  amount: z.coerce.number().positive("El presupuesto debe ser mayor a 0."),
+});
+
+/** Crea o actualiza (por período+etiqueta+moneda) el presupuesto previsto. */
+export async function setTagBudget(
+  input: z.input<typeof budgetInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = budgetInput.parse(input);
+    await Budget.updateOne(
+      {
+        userId: uid,
+        period: data.period,
+        tag: data.tag,
+        currency: data.currency,
+      },
+      { $set: { amount: data.amount } },
+      { upsert: true },
+    );
+  });
+}
+
+export async function deleteTagBudget(id: string): Promise<ActionResult> {
+  return run(async (uid) => {
+    await Budget.deleteOne({ _id: id, userId: uid });
   });
 }

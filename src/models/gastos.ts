@@ -119,3 +119,30 @@ expenseSchema.index(
 
 export type ExpenseDoc = InferSchemaType<typeof expenseSchema>;
 export const Expense = models.Expense ?? model("Expense", expenseSchema);
+
+/* -------------------------------- Budget -------------------------------- */
+
+/**
+ * Presupuesto previsto por etiqueta y mes: no es un gasto en sí, es un tope
+ * contra el que se descuentan (en las queries) todos los gastos del mes que
+ * tengan esa etiqueta, sin importar su categoría.
+ */
+const budgetSchema = new Schema(
+  {
+    userId: { type: String, required: true, default: OWNER_ID, index: true },
+    period: { type: String, required: true }, // YYYY-MM
+    tag: { type: String, enum: EXPENSE_TAGS, required: true },
+    currency: { type: String, enum: CURRENCY_ENUM, required: true },
+    amount: { type: Number, required: true, min: 0 },
+  },
+  { timestamps: true },
+);
+
+// Un solo presupuesto por etiqueta/moneda/mes.
+budgetSchema.index(
+  { userId: 1, period: 1, tag: 1, currency: 1 },
+  { unique: true },
+);
+
+export type BudgetDoc = InferSchemaType<typeof budgetSchema>;
+export const Budget = models.Budget ?? model("Budget", budgetSchema);
