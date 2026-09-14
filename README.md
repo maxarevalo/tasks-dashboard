@@ -226,6 +226,27 @@ Código: `getMonthlyComparison` y `getSpendingTrend` en
 `src/features/gastos/queries.ts`, tipos `MonthlyComparison`/`ComparisonRow`/
 `TrendPoint` en `src/features/gastos/types.ts`.
 
+### Módulo: Auto (`/personal/auto`)
+
+Registro de mantenimiento del auto, por **patente** (sin un maestro de
+vehículos: la patente es un campo libre en cada registro, con sugerencias
+vía `<datalist>` a partir de las ya usadas).
+
+- **Carga de combustible**: patente, fecha, kilometraje, litros y gasto. Se
+  calculan solos el **$/litro** y el **consumo (km/l)** contra la carga
+  anterior de la misma patente (en orden cronológico por km), vacío en la
+  primera carga.
+- **Próximos services**: patente, fecha de carga, fecha de próximo service,
+  descripción y mecánico (opcionales estos dos últimos). Badge según la
+  fecha de próximo service vs. hoy: **Vencido** (rojo, ya pasó), **Próximo**
+  (ámbar, dentro de 30 días) o **Programado**.
+- **Registro de service**: patente, fecha, descripción, gasto y una lista
+  libre de **repuestos cambiados** (agregar/quitar filas, como en los
+  saldos manuales de Ahorros).
+
+Código: `src/models/auto.ts` (Mongoose: `FuelLog`, `UpcomingService`,
+`ServiceRecord`), `src/features/auto/` (queries, actions, types).
+
 ## Estructura
 
 ```
