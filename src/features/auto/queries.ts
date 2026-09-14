@@ -16,38 +16,27 @@ type Lean = Record<string, unknown>;
 const str = (v: unknown) => (v == null ? "" : String(v));
 
 /**
- * Mapea las cargas y calcula, por patente, el consumo (km/l) contra la carga
- * anterior en orden cronológico. Devuelve ordenado por fecha descendente
- * (más reciente primero) para mostrar en la lista.
+ * Mapea las cargas. `km` es relativo (recorridos desde el último tanque
+ * lleno, no odómetro absoluto), así que litros/100km y $/km se calculan
+ * directamente sobre la propia fila, sin comparar contra otras cargas.
+ * Devuelve ordenado por fecha descendente (más reciente primero).
  */
 function mapFuelLogs(docs: Lean[]): FuelLogDTO[] {
-  const chronological = [...docs].sort((a, b) => {
-    const byDate = str(a.date).localeCompare(str(b.date));
-    if (byDate !== 0) return byDate;
-    return ((a.km as number) ?? 0) - ((b.km as number) ?? 0);
-  });
-
-  const lastKmByPlate = new Map<string, number>();
-  const mapped = chronological.map((d) => {
-    const plate = str(d.plate);
+  const mapped = docs.map((d) => {
     const km = (d.km as number) ?? 0;
     const liters = (d.liters as number) ?? 0;
-    const prevKm = lastKmByPlate.get(plate);
-    const kmPerLiter =
-      prevKm != null && km > prevKm && liters > 0
-        ? (km - prevKm) / liters
-        : null;
-    lastKmByPlate.set(plate, km);
+    const amount = (d.amount as number) ?? 0;
 
     return {
       id: str(d._id),
-      plate,
+      plate: str(d.plate),
       date: str(d.date),
       km,
       liters,
-      amount: (d.amount as number) ?? 0,
+      amount,
       currency: (d.currency as Currency) ?? "ARS",
-      kmPerLiter,
+      litersPer100Km: km > 0 ? (liters / km) * 100 : null,
+      pricePerKm: km > 0 ? amount / km : null,
     };
   });
 

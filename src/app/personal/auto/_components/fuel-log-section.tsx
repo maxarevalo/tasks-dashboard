@@ -47,11 +47,16 @@ export function FuelLogSection({ logs }: { logs: FuelLogDTO[] }) {
               <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
                 <th className="px-3 py-2 text-left font-medium">Patente</th>
                 <th className="px-3 py-2 text-left font-medium">Fecha</th>
-                <th className="px-3 py-2 text-right font-medium">Km</th>
+                <th className="px-3 py-2 text-right font-medium">
+                  Km recorridos
+                </th>
                 <th className="px-3 py-2 text-right font-medium">Litros</th>
                 <th className="px-3 py-2 text-right font-medium">Gasto</th>
                 <th className="px-3 py-2 text-right font-medium">$/litro</th>
-                <th className="px-3 py-2 text-right font-medium">Consumo</th>
+                <th className="px-3 py-2 text-right font-medium">
+                  Litros/100km
+                </th>
+                <th className="px-3 py-2 text-right font-medium">$/km</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -107,7 +112,10 @@ function FuelLogRow({
         {formatMoney(pricePerLiter, l.currency)}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-500">
-        {l.kmPerLiter != null ? `${l.kmPerLiter.toFixed(1)} km/l` : "—"}
+        {l.litersPer100Km != null ? l.litersPer100Km.toFixed(1) : "—"}
+      </td>
+      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-500">
+        {l.pricePerKm != null ? formatMoney(l.pricePerKm, l.currency) : "—"}
       </td>
       <td className="whitespace-nowrap px-2 py-2">
         <div className="flex items-center gap-1">
@@ -209,7 +217,7 @@ function FuelLogForm({
               required
             />
           </Field>
-          <Field label="Kilometraje">
+          <Field label="Km recorridos" hint="Desde el último tanque lleno">
             <Input
               type="number"
               min="0"

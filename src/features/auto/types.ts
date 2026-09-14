@@ -9,12 +9,15 @@ export type FuelLogDTO = {
   id: string;
   plate: string;
   date: DateStr;
+  /** Km recorridos desde el último tanque lleno (no odómetro absoluto). */
   km: number;
   liters: number;
   amount: number;
   currency: Currency;
-  /** Calculado: km recorridos / litros cargados desde la carga anterior de la misma patente (null si es la primera). */
-  kmPerLiter: number | null;
+  /** Calculado: litros cada 100 km recorridos (null si km es 0). */
+  litersPer100Km: number | null;
+  /** Calculado: gasto por km recorrido (null si km es 0). */
+  pricePerKm: number | null;
 };
 
 export type ServiceStatus = "overdue" | "soon" | "ok";
