@@ -42,3 +42,8 @@ export const EXPENSE_TAG_COLORS: Record<ExpenseTag, string> = {
 
 /** Color para los gastos sin etiqueta. */
 export const UNTAGGED_COLOR = "#cbd5e1";
+
+/** Color de una etiqueta (o de "sin etiqueta" si es null). */
+export function tagColor(tag: ExpenseTag | null): string {
+  return tag ? EXPENSE_TAG_COLORS[tag] : UNTAGGED_COLOR;
+}

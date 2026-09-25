@@ -1,8 +1,8 @@
 import { formatMoney } from "@/lib/money";
 import { periodShortLabel, type Period } from "@/lib/period";
-import { EXPENSE_TAGS, EXPENSE_TAG_ICONS } from "@/lib/tags";
+import { EXPENSE_TAGS, EXPENSE_TAG_ICONS, tagColor } from "@/lib/tags";
 import type { ExpenseTag, TrendPoint } from "@/features/gastos/types";
-import { SegmentedBar, tagColor } from "./segmented-bar";
+import { SegmentedBar } from "./segmented-bar";
 
 /** Orden fijo de los segmentos: etiquetas en su orden canónico y al final "sin etiqueta". */
 const SEGMENT_ORDER: (ExpenseTag | null)[] = [...EXPENSE_TAGS, null];

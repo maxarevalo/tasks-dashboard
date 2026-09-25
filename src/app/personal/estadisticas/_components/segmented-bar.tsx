@@ -2,14 +2,10 @@
 
 import { useState } from "react";
 import { formatMoney } from "@/lib/money";
-import { EXPENSE_TAG_COLORS, EXPENSE_TAG_ICONS, UNTAGGED_COLOR } from "@/lib/tags";
+import { EXPENSE_TAG_ICONS, tagColor } from "@/lib/tags";
 import type { ExpenseTag } from "@/features/gastos/types";
 
 export type BarSegment = { tag: ExpenseTag | null; amount: number };
-
-export function tagColor(tag: ExpenseTag | null) {
-  return tag ? EXPENSE_TAG_COLORS[tag] : UNTAGGED_COLOR;
-}
 
 function tagLabel(tag: ExpenseTag | null) {
   return tag ? `${EXPENSE_TAG_ICONS[tag]} ${tag}` : "Sin etiqueta";
