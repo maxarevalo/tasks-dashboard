@@ -122,6 +122,8 @@ export type MonthlyComparison = {
 export type TrendPoint = {
   period: Period;
   total: Record<Currency, number>;
+  /** Total en ARS por etiqueta; la clave `null` agrupa los gastos sin etiqueta. */
+  byTagARS: { tag: ExpenseTag | null; amount: number }[];
 };
 
 export type MonthData = {

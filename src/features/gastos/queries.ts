@@ -688,26 +688,45 @@ export async function getMonthlyComparison(
   };
 }
 
-/** Total de gastos cargados por mes, para los últimos `months` meses (incluye `period`). */
+/**
+ * Total de gastos cargados por mes: los últimos `months` meses (incluye `period`)
+ * y los `monthsAhead` meses siguientes.
+ */
 export async function getSpendingTrend(
   period: Period,
   months: number,
+  monthsAhead = 0,
 ): Promise<TrendPoint[]> {
   await connectToDatabase();
   const uid = await getActiveProfileKey();
   const start = addMonths(period, -(months - 1));
-  const periods = periodRange(start, months);
+  const periods = periodRange(start, months + monthsAhead);
 
   const docs = await Expense.find({ userId: uid, period: { $in: periods } })
-    .select("period amount currency")
+    .select("period amount currency tag")
     .lean();
 
   const totals = new Map<Period, Record<Currency, number>>(
     periods.map((p) => [p, zeroCurrency()]),
   );
+  const byTag = new Map<Period, Map<ExpenseTag | null, number>>(
+    periods.map((p) => [p, new Map()]),
+  );
   for (const d of docs) {
-    const t = totals.get(String(d.period));
-    if (t) t[d.currency as Currency] += (d.amount as number) ?? 0;
+    const p = String(d.period);
+    const t = totals.get(p);
+    if (!t) continue;
+    const amount = (d.amount as number) ?? 0;
+    t[d.currency as Currency] += amount;
+    if (d.currency === "ARS") {
+      const tag = d.tag ? (String(d.tag) as ExpenseTag) : null;
+      const m = byTag.get(p)!;
+      m.set(tag, (m.get(tag) ?? 0) + amount);
+    }
   }
-  return periods.map((p) => ({ period: p, total: totals.get(p)! }));
+  return periods.map((p) => ({
+    period: p,
+    total: totals.get(p)!,
+    byTagARS: [...byTag.get(p)!].map(([tag, amount]) => ({ tag, amount })),
+  }));
 }
