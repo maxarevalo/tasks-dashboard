@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,20 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Mi Dashboard",
   description: "Panel personal y laboral",
+  applicationName: "Mi Dashboard",
+  // Instalada en iPhone ("Agregar a inicio") se abre a pantalla completa.
+  appleWebApp: {
+    capable: true,
+    title: "Dashboard",
+    statusBarStyle: "default",
+  },
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({
