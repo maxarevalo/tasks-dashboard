@@ -1,23 +1,11 @@
 import { formatMoney } from "@/lib/money";
 import { periodShortLabel, type Period } from "@/lib/period";
-import {
-  EXPENSE_TAGS,
-  EXPENSE_TAG_COLORS,
-  EXPENSE_TAG_ICONS,
-  UNTAGGED_COLOR,
-} from "@/lib/tags";
+import { EXPENSE_TAGS, EXPENSE_TAG_ICONS, tagColor } from "@/lib/tags";
 import type { ExpenseTag, TrendPoint } from "@/features/gastos/types";
+import { SegmentedBar } from "./segmented-bar";
 
 /** Orden fijo de los segmentos: etiquetas en su orden canónico y al final "sin etiqueta". */
 const SEGMENT_ORDER: (ExpenseTag | null)[] = [...EXPENSE_TAGS, null];
-
-function tagColor(tag: ExpenseTag | null) {
-  return tag ? EXPENSE_TAG_COLORS[tag] : UNTAGGED_COLOR;
-}
-
-function tagLabel(tag: ExpenseTag | null) {
-  return tag ?? "Sin etiqueta";
-}
 
 /** Segmentos positivos de la barra, en orden fijo. */
 function segmentsOf(t: TrendPoint) {
@@ -62,7 +50,7 @@ export function TrendChart({
         en ARS, por etiqueta)
       </p>
       <div className="space-y-1">
-        {rows.map(({ t, segments, barTotal }) => {
+        {rows.map(({ t, segments }) => {
           const isToday = t.period === today;
           return (
             <div
@@ -79,24 +67,7 @@ export function TrendChart({
               >
                 {periodShortLabel(t.period)}
               </span>
-              <div className="h-4 flex-1 overflow-hidden rounded bg-slate-100">
-                <div
-                  className="flex h-full overflow-hidden rounded"
-                  style={{ width: `${(barTotal / maxBar) * 100}%` }}
-                >
-                  {segments.map((s) => (
-                    <div
-                      key={s.tag ?? "__none"}
-                      className="h-full"
-                      style={{
-                        width: `${(s.amount / barTotal) * 100}%`,
-                        backgroundColor: tagColor(s.tag),
-                      }}
-                      title={`${tagLabel(s.tag)}: ${formatMoney(s.amount, "ARS")}`}
-                    />
-                  ))}
-                </div>
-              </div>
+              <SegmentedBar segments={segments} maxBar={maxBar} />
               <span
                 className={`w-28 shrink-0 text-right text-xs font-medium tabular-nums ${
                   isToday ? "text-sky-700" : "text-slate-700"
