@@ -85,6 +85,11 @@ export function MatrixTable({ matrix }: { matrix: ExpenseMatrix }) {
                 >
                   <td className={`${stickyCol} bg-white`}>
                     <span className="text-slate-800">{row.description}</span>
+                    {row.installment && (
+                      <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        cuotas
+                      </span>
+                    )}
                     {row.cardName && (
                       <span className="ml-1.5 text-xs text-slate-400">
                         {row.cardName}

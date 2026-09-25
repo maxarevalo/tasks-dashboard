@@ -219,6 +219,21 @@ export async function getProjectedExpenseTotals(
  * monedas que se leen de la base; `convert` pasa cada monto a la moneda de
  * visualización (identidad en el modo por-moneda, con tasa en el unificado).
  */
+/**
+ * Orden de las filas de Tarjetas: por tarjeta (alfabético, sin tarjeta al
+ * final); dentro de cada tarjeta, primero las compras en cuotas y después el
+ * resto, cada bloque de mayor a menor total.
+ */
+function compareCardRows(a: MatrixRow, b: MatrixRow): number {
+  if (a.cardName !== b.cardName) {
+    if (a.cardName == null) return 1;
+    if (b.cardName == null) return -1;
+    return a.cardName.localeCompare(b.cardName, "es", { sensitivity: "base" });
+  }
+  if (a.installment !== b.installment) return a.installment ? -1 : 1;
+  return b.total - a.total;
+}
+
 async function buildExpenseMatrixCore(
   uid: string,
   periods: Period[],
@@ -237,7 +252,9 @@ async function buildExpenseMatrixCore(
       period: { $in: periods },
       currency: currencyFilter,
     })
-      .select("period amount currency category description cardId fixedId")
+      .select(
+        "period amount currency category description cardId fixedId source installment",
+      )
       .lean(),
     getCards(true),
     FixedExpense.find({
@@ -270,6 +287,7 @@ async function buildExpenseMatrixCore(
         category,
         description: description.trim(),
         cardName: cardId ? (cardNameById.get(cardId) ?? null) : null,
+        installment: false,
         cells: {},
         total: 0,
       };
@@ -297,6 +315,10 @@ async function buildExpenseMatrixCore(
     cell.amount += amount;
     row.cells[p] = cell;
     row.total += amount;
+    const inst = e.installment as { total?: number } | undefined;
+    if (e.source === "installment" || (inst?.total ?? 0) > 1) {
+      row.installment = true;
+    }
     if (e.fixedId) materialized.add(`${p}|${String(e.fixedId)}`);
   }
 
@@ -339,7 +361,11 @@ async function buildExpenseMatrixCore(
   const groups = CATEGORY_ORDER.map((category) => {
     const rows = [...rowMap.values()]
       .filter((r) => r.category === category)
-      .sort((a, b) => b.total - a.total);
+      .sort(
+        category === "tarjeta"
+          ? compareCardRows
+          : (a, b) => b.total - a.total,
+      );
     const subtotals: Record<Period, number> = Object.fromEntries(
       periods.map((p) => [p, 0]),
     );

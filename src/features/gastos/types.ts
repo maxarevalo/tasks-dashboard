@@ -170,6 +170,8 @@ export type MatrixRow = {
   category: ExpenseCategory;
   description: string;
   cardName: string | null;
+  /** true si algún gasto de la fila es una compra en cuotas. */
+  installment: boolean;
   cells: Record<Period, MatrixCell>;
   total: number;
 };
