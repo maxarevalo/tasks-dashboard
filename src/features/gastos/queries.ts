@@ -18,6 +18,7 @@ import {
 } from "@/lib/period";
 import type { Currency } from "@/lib/money";
 import { convertAmount } from "@/lib/exchange";
+import { convertTaggedPrevistos } from "./budget-conversion";
 import { EXPENSE_TAG_ICONS } from "@/lib/tags";
 import {
   CATEGORY_LABELS,
@@ -461,6 +462,8 @@ export async function getUnifiedExpenseMatrix(
 export async function getMonthData(period: Period): Promise<MonthData> {
   await connectToDatabase();
   const uid = await getActiveProfileKey();
+  // Previstos con etiqueta cargados antes de que existieran los presupuestos.
+  await convertTaggedPrevistos(uid);
 
   const nextPeriod = addMonths(period, 1);
 

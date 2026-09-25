@@ -213,7 +213,14 @@ export function ExpenseForm({
           </Field>
         </div>
 
-        <Field label="Etiqueta" hint="Opcional">
+        <Field
+          label="Etiqueta"
+          hint={
+            mode !== "installments" && category === "previsto" && tag
+              ? "Se guarda como presupuesto por etiqueta"
+              : "Opcional"
+          }
+        >
           <Select
             value={tag}
             onChange={(e) => setTag(e.target.value as ExpenseTag | "")}
