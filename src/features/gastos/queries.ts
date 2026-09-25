@@ -123,7 +123,10 @@ function mapFixed(doc: Lean, cardName: string | null): FixedExpenseDTO {
   };
 }
 
-function buildSummary(expenses: ExpenseDTO[]): MonthSummary {
+function buildSummary(
+  expenses: ExpenseDTO[],
+  budgets: BudgetDTO[] = [],
+): MonthSummary {
   const byCategory = Object.fromEntries(
     EXPENSE_CATEGORIES.map((c) => [c, { ARS: 0, USD: 0 }]),
   ) as MonthSummary["byCategory"];
@@ -135,6 +138,14 @@ function buildSummary(expenses: ExpenseDTO[]): MonthSummary {
     byCategory[e.category][e.currency] += e.amount;
     total[e.currency] += e.amount;
     (e.paid ? paid : pending)[e.currency] += e.amount;
+  }
+
+  // Lo que falta gastar de cada presupuesto por etiqueta cuenta como previsto pendiente.
+  for (const b of budgets) {
+    const outstanding = budgetOutstanding(b.amount, b.spent);
+    byCategory.previsto[b.currency] += outstanding;
+    total[b.currency] += outstanding;
+    pending[b.currency] += outstanding;
   }
 
   return { byCategory, total, paid, pending };
@@ -163,6 +174,19 @@ export async function getFixedExpenses(): Promise<FixedExpenseDTO[]> {
 }
 
 /**
+ * Lo que todavía falta gastar de un presupuesto por etiqueta: cuenta como
+ * gasto previsto (para totales y proyección) hasta que se cargan los gastos
+ * reales de esa etiqueta. Nunca es negativo: si se excedió, ya lo reflejan
+ * los gastos reales.
+ */
+function budgetOutstanding(amount: number, spent: number): number {
+  return Math.max(0, amount - spent);
+}
+
+const tagKey = (period: Period, tag: unknown, currency: unknown) =>
+  `${period}|${String(tag)}|${String(currency)}`;
+
+/**
  * Total de gastos por mes y moneda, para la proyección del módulo contable.
  * Incluye lo materializado + las plantillas de gastos fijos activas que
  * todavía no se cargaron en ese mes (así la proyección contempla los fijos).
@@ -177,14 +201,23 @@ export async function getProjectedExpenseTotals(
   for (const p of periods) result[p] = { ARS: 0, USD: 0 };
   if (periods.length === 0) return result;
 
-  const [expenseDocs, fixedDocs] = await Promise.all([
+  const [expenseDocs, fixedDocs, budgetDocs] = await Promise.all([
     Expense.find({ userId: uid, period: { $in: periods } })
-      .select("period amount currency fixedId")
+      .select("period amount currency fixedId tag")
       .lean(),
     FixedExpense.find({ userId: uid, active: true })
-      .select("amount currency startPeriod endPeriod skipPeriods frequency")
+      .select("amount currency startPeriod endPeriod skipPeriods frequency tag")
       .lean(),
+    Budget.find({ userId: uid, period: { $in: periods } }).lean(),
   ]);
+
+  // Gastado por etiqueta (reales + fijos estimados), para descontar de los presupuestos.
+  const spentByTag = new Map<string, number>();
+  const addSpent = (p: Period, tag: unknown, cur: unknown, amount: number) => {
+    if (!tag) return;
+    const k = tagKey(p, tag, cur);
+    spentByTag.set(k, (spentByTag.get(k) ?? 0) + amount);
+  };
 
   const materialized = new Set<string>(); // `${period}|${fixedId}`
   for (const e of expenseDocs) {
@@ -192,6 +225,7 @@ export async function getProjectedExpenseTotals(
     if (!result[p]) continue;
     const cur = (e.currency as "ARS" | "USD") ?? "ARS";
     result[p][cur] += (e.amount as number) ?? 0;
+    addSpent(p, e.tag, cur, (e.amount as number) ?? 0);
     if (e.fixedId) materialized.add(`${p}|${String(e.fixedId)}`);
   }
 
@@ -208,7 +242,18 @@ export async function getProjectedExpenseTotals(
       if (materialized.has(`${p}|${String(f._id)}`)) continue;
       const cur = (f.currency as "ARS" | "USD") ?? "ARS";
       result[p][cur] += (f.amount as number) ?? 0;
+      addSpent(p, f.tag, cur, (f.amount as number) ?? 0);
     }
+  }
+
+  for (const b of budgetDocs) {
+    const p = String(b.period);
+    if (!result[p]) continue;
+    const cur = (b.currency as "ARS" | "USD") ?? "ARS";
+    result[p][cur] += budgetOutstanding(
+      (b.amount as number) ?? 0,
+      spentByTag.get(tagKey(p, b.tag, cur)) ?? 0,
+    );
   }
 
   return result;
@@ -247,14 +292,14 @@ async function buildExpenseMatrixCore(
       ? sourceCurrencies[0]
       : { $in: sourceCurrencies };
 
-  const [expenseDocs, cards, fixedDocs] = await Promise.all([
+  const [expenseDocs, cards, fixedDocs, budgetDocs] = await Promise.all([
     Expense.find({
       userId: uid,
       period: { $in: periods },
       currency: currencyFilter,
     })
       .select(
-        "period amount currency category description cardId fixedId source installment",
+        "period amount currency category description cardId fixedId source installment tag",
       )
       .lean(),
     getCards(true),
@@ -264,9 +309,14 @@ async function buildExpenseMatrixCore(
       currency: currencyFilter,
     })
       .select(
-        "description category cardId amount currency startPeriod endPeriod skipPeriods frequency",
+        "description category cardId amount currency startPeriod endPeriod skipPeriods frequency tag",
       )
       .lean(),
+    Budget.find({
+      userId: uid,
+      period: { $in: periods },
+      currency: currencyFilter,
+    }).lean(),
   ]);
 
   const cardNameById = new Map(cards.map((c) => [c.id, c.name]));
@@ -299,6 +349,14 @@ async function buildExpenseMatrixCore(
 
   const materialized = new Set<string>(); // `${period}|${fixedId}`
 
+  // Gastado por etiqueta en la moneda original, para descontar de los presupuestos.
+  const spentByTag = new Map<string, number>();
+  const addSpent = (p: Period, tag: unknown, cur: unknown, amount: number) => {
+    if (!tag) return;
+    const k = tagKey(p, tag, cur);
+    spentByTag.set(k, (spentByTag.get(k) ?? 0) + amount);
+  };
+
   for (const e of expenseDocs) {
     const p = String(e.period);
     if (!periodSet.has(p)) continue;
@@ -316,6 +374,7 @@ async function buildExpenseMatrixCore(
     cell.amount += amount;
     row.cells[p] = cell;
     row.total += amount;
+    addSpent(p, e.tag, e.currency, (e.amount as number) ?? 0);
     const inst = e.installment as { total?: number } | undefined;
     if (e.source === "installment" || (inst?.total ?? 0) > 1) {
       row.installment = true;
@@ -350,7 +409,33 @@ async function buildExpenseMatrixCore(
       if (row.cells[p]) continue; // ya hay algo real ahí
       row.cells[p] = { amount, estimated: true };
       row.total += amount;
+      addSpent(p, f.tag, f.currency, (f.amount as number) ?? 0);
     }
+  }
+
+  // Presupuestos por etiqueta: lo que falta gastar cuenta como previsto (estimado).
+  for (const b of budgetDocs) {
+    const p = String(b.period);
+    if (!periodSet.has(p)) continue;
+    const tag = String(b.tag) as ExpenseTag;
+    const outstanding = budgetOutstanding(
+      (b.amount as number) ?? 0,
+      spentByTag.get(tagKey(p, b.tag, b.currency)) ?? 0,
+    );
+    if (outstanding <= 0) continue;
+    const amount = convert(
+      outstanding,
+      (b.currency as Currency) ?? displayCurrency,
+    );
+    const row = rowFor(
+      "previsto",
+      `${EXPENSE_TAG_ICONS[tag] ?? ""} ${tag} (presupuesto)`,
+      null,
+    );
+    const cell = row.cells[p] ?? { amount: 0, estimated: true };
+    cell.amount += amount;
+    row.cells[p] = cell;
+    row.total += amount;
   }
 
   // Agrupar por categoría, ordenar, totalizar.
@@ -599,7 +684,7 @@ export async function getMonthData(period: Period): Promise<MonthData> {
     expenses,
     cards: cards.filter((c) => !c.archived),
     fixedTemplates,
-    summary: buildSummary(expenses),
+    summary: buildSummary(expenses, budgets),
     pendingManualFixed,
     pendingAutoFixedCount: pending.filter((f) => f.autoGenerate).length,
     notContinuingNextMonth,

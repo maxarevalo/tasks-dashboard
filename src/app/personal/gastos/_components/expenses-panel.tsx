@@ -605,7 +605,9 @@ function BudgetForm({
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
           Cargá un monto previsto para una etiqueta este mes: se va a ir
           descontando automáticamente por cada gasto (de cualquier
-          categoría) que cargues con esa misma etiqueta.
+          categoría) que cargues con esa misma etiqueta. Lo que queda
+          disponible cuenta como gasto previsto en los totales y la
+          proyección.
         </p>
 
         <div className="grid grid-cols-2 gap-3">

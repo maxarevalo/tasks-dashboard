@@ -106,7 +106,7 @@ export default async function TablaGastosPage({
       <p className="text-xs text-slate-400">
         Los valores en <span className="italic">cursiva con *</span> son gastos
         fijos que todavía no se cargaron en ese mes (estimados desde la
-        plantilla).
+        plantilla) o lo que queda disponible de un presupuesto por etiqueta.
       </p>
     </div>
   );
