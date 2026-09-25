@@ -1,7 +1,7 @@
 import { BarChart3 } from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
 import { MonthNav } from "@/components/month-nav";
-import { normalizePeriod } from "@/lib/period";
+import { currentPeriod, normalizePeriod } from "@/lib/period";
 import {
   getMonthlyComparison,
   getSpendingTrend,
@@ -12,6 +12,7 @@ import { TrendChart } from "./_components/trend-chart";
 export const dynamic = "force-dynamic";
 
 const TREND_MONTHS = 6;
+const TREND_MONTHS_AHEAD = 12;
 
 export default async function EstadisticasPage({
   searchParams,
@@ -23,7 +24,7 @@ export default async function EstadisticasPage({
 
   const [comparison, trend] = await Promise.all([
     getMonthlyComparison(period),
-    getSpendingTrend(period, TREND_MONTHS),
+    getSpendingTrend(period, TREND_MONTHS, TREND_MONTHS_AHEAD),
   ]);
 
   return (
@@ -36,7 +37,12 @@ export default async function EstadisticasPage({
 
       <MonthNav period={period} basePath="/personal/estadisticas" />
 
-      <TrendChart trend={trend} />
+      <TrendChart
+        trend={trend}
+        period={period}
+        monthsAhead={TREND_MONTHS_AHEAD}
+        today={currentPeriod()}
+      />
 
       <ComparisonSection
         title="Gastos mensuales por categoría"

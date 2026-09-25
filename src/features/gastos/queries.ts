@@ -688,15 +688,19 @@ export async function getMonthlyComparison(
   };
 }
 
-/** Total de gastos cargados por mes, para los últimos `months` meses (incluye `period`). */
+/**
+ * Total de gastos cargados por mes: los últimos `months` meses (incluye `period`)
+ * y los `monthsAhead` meses siguientes.
+ */
 export async function getSpendingTrend(
   period: Period,
   months: number,
+  monthsAhead = 0,
 ): Promise<TrendPoint[]> {
   await connectToDatabase();
   const uid = await getActiveProfileKey();
   const start = addMonths(period, -(months - 1));
-  const periods = periodRange(start, months);
+  const periods = periodRange(start, months + monthsAhead);
 
   const docs = await Expense.find({ userId: uid, period: { $in: periods } })
     .select("period amount currency")
