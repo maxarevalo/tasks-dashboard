@@ -701,6 +701,49 @@ function zeroCurrency(): Record<Currency, number> {
 }
 
 /**
+ * Por cada presupuesto por etiqueta de `periods`, un gasto "virtual" de
+ * categoría Previsto con lo que falta gastar (monto - gastos reales de esa
+ * etiqueta en `expenseDocs`), para sumarlo en Estadísticas como en el resto.
+ */
+async function budgetOutstandingDocs(
+  uid: string,
+  periods: Period[],
+  expenseDocs: Lean[],
+): Promise<Lean[]> {
+  const budgets = await Budget.find({ userId: uid, period: { $in: periods } })
+    .select("period tag currency amount")
+    .lean();
+  if (budgets.length === 0) return [];
+
+  const spentByTag = new Map<string, number>();
+  for (const d of expenseDocs) {
+    if (!d.tag) continue;
+    const k = tagKey(String(d.period), d.tag, d.currency);
+    spentByTag.set(k, (spentByTag.get(k) ?? 0) + ((d.amount as number) ?? 0));
+  }
+
+  return budgets.flatMap((b) => {
+    const p = String(b.period);
+    const amount = budgetOutstanding(
+      (b.amount as number) ?? 0,
+      spentByTag.get(tagKey(p, b.tag, b.currency)) ?? 0,
+    );
+    return amount > 0
+      ? [
+          {
+            period: p,
+            category: "previsto",
+            amount,
+            currency: b.currency,
+            cardId: null,
+            tag: b.tag,
+          } as Lean,
+        ]
+      : [];
+  });
+}
+
+/**
  * Agrupa `docs` (gastos de `period` y `previousPeriod`, ya filtrados) según
  * `keyOf`; descarta los que devuelven `null` (ej. sin etiqueta) y las filas
  * que terminan en cero en ambos meses. Ordenado por el total del mes actual.
@@ -757,7 +800,10 @@ export async function getMonthlyComparison(
   ]);
 
   const cardName = new Map(cards.map((c) => [c.id, c.name]));
-  const lean = docs as Lean[];
+  const lean = [
+    ...(docs as Lean[]),
+    ...(await budgetOutstandingDocs(uid, [period, previousPeriod], docs as Lean[])),
+  ];
 
   const byCategory = buildComparisonRows(
     lean,
@@ -803,8 +849,9 @@ export async function getMonthlyComparison(
 }
 
 /**
- * Total de gastos cargados por mes: los últimos `months` meses (incluye `period`)
- * y los `monthsAhead` meses siguientes.
+ * Total de gastos cargados por mes (más lo disponible de los presupuestos
+ * por etiqueta): los últimos `months` meses (incluye `period`) y los
+ * `monthsAhead` meses siguientes.
  */
 export async function getSpendingTrend(
   period: Period,
@@ -816,9 +863,16 @@ export async function getSpendingTrend(
   const start = addMonths(period, -(months - 1));
   const periods = periodRange(start, months + monthsAhead);
 
-  const docs = await Expense.find({ userId: uid, period: { $in: periods } })
+  const expenseDocs = await Expense.find({
+    userId: uid,
+    period: { $in: periods },
+  })
     .select("period amount currency tag")
     .lean();
+  const docs = [
+    ...(expenseDocs as Lean[]),
+    ...(await budgetOutstandingDocs(uid, periods, expenseDocs as Lean[])),
+  ];
 
   const totals = new Map<Period, Record<Currency, number>>(
     periods.map((p) => [p, zeroCurrency()]),

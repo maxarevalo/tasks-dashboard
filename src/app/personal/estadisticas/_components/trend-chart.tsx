@@ -46,8 +46,8 @@ export function TrendChart({
       </h3>
       <p className="mb-3 text-xs text-slate-400">
         Últimos {trend.length - monthsAhead} meses hasta{" "}
-        {periodShortLabel(period)} y próximos {monthsAhead} (gastos cargados,
-        en ARS, por etiqueta)
+        {periodShortLabel(period)} y próximos {monthsAhead} (gastos cargados
+        más lo disponible de los presupuestos, en ARS, por etiqueta)
       </p>
       <div className="space-y-1">
         {rows.map(({ t, segments }) => {
