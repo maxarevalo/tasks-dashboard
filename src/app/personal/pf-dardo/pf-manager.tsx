@@ -28,6 +28,7 @@ import type {
   PlazoFijoDTO,
   PfMovementDTO,
 } from "@/features/pf-dardo/types";
+import { PfMovementsCharts } from "./pf-movements-chart";
 
 const pct = (n: number) =>
   `${n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
@@ -70,6 +71,8 @@ export function PfManager({ overview }: { overview: PfOverview }) {
           highlight
         />
       </section>
+
+      <PfMovementsCharts plazos={[...history, ...active]} />
 
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
