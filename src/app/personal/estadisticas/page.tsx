@@ -6,6 +6,7 @@ import {
   getMonthlyComparison,
   getSpendingTrend,
 } from "@/features/gastos/queries";
+import { getExchangeRate } from "@/features/contable/queries";
 import { ComparisonSection } from "./_components/comparison-section";
 import { TrendChart } from "./_components/trend-chart";
 
@@ -22,9 +23,10 @@ export default async function EstadisticasPage({
   const { mes } = await searchParams;
   const period = normalizePeriod(mes);
 
-  const [comparison, trend] = await Promise.all([
+  const [comparison, trend, rate] = await Promise.all([
     getMonthlyComparison(period),
     getSpendingTrend(period, TREND_MONTHS, TREND_MONTHS_AHEAD),
+    getExchangeRate(),
   ]);
 
   return (
@@ -42,6 +44,7 @@ export default async function EstadisticasPage({
         period={period}
         monthsAhead={TREND_MONTHS_AHEAD}
         today={currentPeriod()}
+        rate={rate.ready ? rate.value : null}
       />
 
       <ComparisonSection

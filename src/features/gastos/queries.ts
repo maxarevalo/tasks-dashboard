@@ -877,24 +877,25 @@ export async function getSpendingTrend(
   const totals = new Map<Period, Record<Currency, number>>(
     periods.map((p) => [p, zeroCurrency()]),
   );
-  const byTag = new Map<Period, Map<ExpenseTag | null, number>>(
-    periods.map((p) => [p, new Map()]),
+  const byTag = new Map<Period, Record<Currency, Map<ExpenseTag | null, number>>>(
+    periods.map((p) => [p, { ARS: new Map(), USD: new Map() }]),
   );
   for (const d of docs) {
     const p = String(d.period);
     const t = totals.get(p);
     if (!t) continue;
+    const cur = d.currency as Currency;
     const amount = (d.amount as number) ?? 0;
-    t[d.currency as Currency] += amount;
-    if (d.currency === "ARS") {
-      const tag = d.tag ? (String(d.tag) as ExpenseTag) : null;
-      const m = byTag.get(p)!;
-      m.set(tag, (m.get(tag) ?? 0) + amount);
-    }
+    t[cur] += amount;
+    const tag = d.tag ? (String(d.tag) as ExpenseTag) : null;
+    const m = byTag.get(p)![cur];
+    m.set(tag, (m.get(tag) ?? 0) + amount);
   }
+  const toList = (m: Map<ExpenseTag | null, number>) =>
+    [...m].map(([tag, amount]) => ({ tag, amount }));
   return periods.map((p) => ({
     period: p,
     total: totals.get(p)!,
-    byTagARS: [...byTag.get(p)!].map(([tag, amount]) => ({ tag, amount })),
+    byTag: { ARS: toList(byTag.get(p)!.ARS), USD: toList(byTag.get(p)!.USD) },
   }));
 }
