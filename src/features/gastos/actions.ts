@@ -16,11 +16,6 @@ import {
 } from "@/lib/period";
 import { EXPENSE_TAGS } from "@/lib/tags";
 import type { ActionResult, DupStatus } from "./types";
-import {
-  addToBudget,
-  convertTaggedPrevistos,
-  isBudgetPrevisto,
-} from "./budget-conversion";
 
 const GASTOS_PATH = "/personal/gastos";
 
@@ -251,10 +246,6 @@ export async function createExpense(
 ): Promise<ActionResult> {
   return run(async (uid) => {
     const data = expenseInput.parse(input);
-    if (isBudgetPrevisto(data)) {
-      await addToBudget(uid, data.period, data.tag!, data.currency, data.amount);
-      return;
-    }
     await Expense.create({
       userId: uid,
       ...data,
@@ -276,10 +267,9 @@ export async function createExpensesBulk(
     if (items.length > 300) {
       throw new Error("Máximo 300 items por importación.");
     }
-    const parsed = items.map((raw) => bulkExpenseInput.parse(raw));
-    const rows = parsed
-      .filter((data) => !isBudgetPrevisto(data))
-      .map((data) => ({
+    const rows = items.map((raw) => {
+      const data = bulkExpenseInput.parse(raw);
+      return {
         userId: uid,
         period: data.period,
         category: data.category,
@@ -291,11 +281,9 @@ export async function createExpensesBulk(
         source: "manual" as const,
         paid: data.paid ?? false,
         paidAt: data.paid ? new Date() : undefined,
-      }));
-    if (rows.length > 0) await Expense.insertMany(rows);
-    for (const data of parsed.filter(isBudgetPrevisto)) {
-      await addToBudget(uid, data.period, data.tag!, data.currency, data.amount);
-    }
+      };
+    });
+    await Expense.insertMany(rows);
   });
 }
 
@@ -391,8 +379,6 @@ export async function updateExpense(
       { _id: id, userId: uid },
       { $set: { ...data, tag: data.tag ?? null, ...extra } },
     );
-    // Si quedó como "Previsto" con etiqueta, pasa a ser presupuesto.
-    await convertTaggedPrevistos(uid, [id]);
   });
 }
 
