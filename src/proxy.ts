@@ -22,6 +22,9 @@ export default auth(function proxy(req) {
 });
 
 export const config = {
-  // Protege todo salvo las rutas de auth, assets estáticos y el favicon.
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
+  // Protege todo salvo las rutas de auth, assets estáticos, el favicon y lo
+  // que el celular necesita sin sesión para instalar la app (manifest e íconos).
+  matcher: [
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/).*)",
+  ],
 };

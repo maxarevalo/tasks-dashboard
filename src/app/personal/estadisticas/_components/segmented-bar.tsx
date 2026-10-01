@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, type Currency } from "@/lib/money";
 import { EXPENSE_TAG_ICONS, tagColor } from "@/lib/tags";
 import type { ExpenseTag } from "@/features/gastos/types";
 
@@ -18,9 +18,11 @@ function tagLabel(tag: ExpenseTag | null) {
 export function SegmentedBar({
   segments,
   maxBar,
+  currency = "ARS",
 }: {
   segments: BarSegment[];
   maxBar: number;
+  currency?: Currency;
 }) {
   const [active, setActive] = useState<number | null>(null);
   const barTotal = segments.reduce((acc, s) => acc + s.amount, 0);
@@ -50,7 +52,7 @@ export function SegmentedBar({
         />
         <span className="font-medium">{tagLabel(s.tag)}</span>
         <span className="ml-1.5 tabular-nums text-slate-300">
-          {formatMoney(s.amount, "ARS")} ·{" "}
+          {formatMoney(s.amount, currency)} ·{" "}
           {Math.round((s.amount / barTotal) * 100)}%
         </span>
       </div>
@@ -75,7 +77,7 @@ export function SegmentedBar({
                 width: `${(s.amount / barTotal) * 100}%`,
                 backgroundColor: tagColor(s.tag),
               }}
-              aria-label={`${s.tag ?? "Sin etiqueta"}: ${formatMoney(s.amount, "ARS")}`}
+              aria-label={`${s.tag ?? "Sin etiqueta"}: ${formatMoney(s.amount, currency)}`}
               onMouseEnter={() => setActive(i)}
               onClick={() => setActive(active === i ? null : i)}
             />

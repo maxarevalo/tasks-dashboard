@@ -122,8 +122,8 @@ export type MonthlyComparison = {
 export type TrendPoint = {
   period: Period;
   total: Record<Currency, number>;
-  /** Total en ARS por etiqueta; la clave `null` agrupa los gastos sin etiqueta. */
-  byTagARS: { tag: ExpenseTag | null; amount: number }[];
+  /** Total por moneda y etiqueta; `tag: null` agrupa los gastos sin etiqueta. */
+  byTag: Record<Currency, { tag: ExpenseTag | null; amount: number }[]>;
 };
 
 export type MonthData = {
@@ -170,6 +170,8 @@ export type MatrixRow = {
   category: ExpenseCategory;
   description: string;
   cardName: string | null;
+  /** true si algún gasto de la fila es una compra en cuotas. */
+  installment: boolean;
   cells: Record<Period, MatrixCell>;
   total: number;
 };
