@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Archive, ArchiveRestore, Trash2, Star } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Archive,
+  ArchiveRestore,
+  Trash2,
+  Star,
+  ChevronDown,
+} from "lucide-react";
 import { Modal } from "@/components/modal";
 import { Field, Input, Select, Button, ErrorText } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
@@ -16,9 +24,12 @@ import {
 } from "@/features/contable/actions";
 import {
   AVAILABILITY_LABELS,
+  type AccountMovementDTO,
   type SavingsAccountDTO,
   type ReturnMode,
 } from "@/features/contable/types";
+import { dateLabel } from "@/lib/pf";
+import type { Currency } from "@/lib/money";
 
 const CATEGORY_SUGGESTIONS = [
   "Reserva de emergencia",
@@ -32,8 +43,11 @@ const RETURN_MODES: ReturnMode[] = ["none", "tna", "tea", "monthly", "manual"];
 
 export function SavingsManager({
   accounts,
+  movements,
 }: {
   accounts: SavingsAccountDTO[];
+  /** Últimos movimientos por id de cuenta. */
+  movements: Record<string, AccountMovementDTO[]>;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SavingsAccountDTO | null>(null);
@@ -70,8 +84,9 @@ export function SavingsManager({
             {items.map((a) => (
               <li
                 key={a.id}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
+                className="rounded-xl border border-slate-200 bg-white"
               >
+                <div className="flex items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p
                     className={`flex items-center gap-2 text-sm font-medium ${
@@ -129,6 +144,11 @@ export function SavingsManager({
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
+                </div>
+                <AccountMovements
+                  currency={a.currency}
+                  movements={movements[a.id] ?? []}
+                />
               </li>
             ))}
           </ul>
@@ -145,6 +165,65 @@ export function SavingsManager({
           <option key={c} value={c} />
         ))}
       </datalist>
+    </div>
+  );
+}
+
+const KIND_LABELS: Record<AccountMovementDTO["kind"], string> = {
+  pago: "Pago",
+  cobro: "Cobro",
+  ajuste: "Ajuste",
+};
+
+/** Historial plegable de pagos, cobros y ajustes de una cuenta. */
+function AccountMovements({
+  currency,
+  movements,
+}: {
+  currency: Currency;
+  movements: AccountMovementDTO[];
+}) {
+  const [open, setOpen] = useState(false);
+  if (movements.length === 0) return null;
+  return (
+    <div className="border-t border-slate-100">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900"
+        aria-expanded={open}
+      >
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+        Movimientos ({movements.length}
+        {movements.length >= 20 ? "+" : ""})
+      </button>
+      {open && (
+        <ul className="divide-y divide-slate-100 border-t border-slate-100">
+          {movements.map((m) => (
+            <li key={m.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+              <span className="w-24 shrink-0 text-xs text-slate-500">
+                {dateLabel(m.date)}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-slate-700">
+                <span className="mr-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
+                  {KIND_LABELS[m.kind]}
+                </span>
+                {m.description}
+              </span>
+              <span
+                className={`shrink-0 tabular-nums font-medium ${
+                  m.amount < 0 ? "text-slate-900" : "text-emerald-700"
+                }`}
+              >
+                {m.amount > 0 ? "+" : "−"}
+                {formatMoney(Math.abs(m.amount), currency)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -299,7 +378,10 @@ function AccountForm({
               <option value="USD">USD</option>
             </Select>
           </Field>
-          <Field label="Saldo actual">
+          <Field
+            label="Saldo actual"
+            hint={editing ? "Si lo cambiás, queda como ajuste en Movimientos" : undefined}
+          >
             <Input
               type="number"
               step="0.01"

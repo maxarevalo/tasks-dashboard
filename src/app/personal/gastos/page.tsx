@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-parts";
 import { MonthNav } from "@/components/month-nav";
 import { normalizePeriod, addMonths, periodLabel } from "@/lib/period";
 import { getMonthData } from "@/features/gastos/queries";
+import { getSavingsAccounts } from "@/features/contable/queries";
 import { Summary } from "./_components/summary";
 import { ExpensesPanel } from "./_components/expenses-panel";
 import { GenerateFixedButton } from "./_components/generate-fixed-button";
@@ -18,7 +19,17 @@ export default async function GastosPage({
 }) {
   const { mes } = await searchParams;
   const period = normalizePeriod(mes);
-  const data = await getMonthData(period);
+  const [data, savings] = await Promise.all([
+    getMonthData(period),
+    getSavingsAccounts(false),
+  ]);
+  const accounts = savings.map((a) => ({
+    id: a.id,
+    name: a.name,
+    currency: a.currency,
+    balance: a.balance,
+    receivesNet: a.receivesNet,
+  }));
 
   return (
     <div className="space-y-6">
@@ -90,6 +101,7 @@ export default async function GastosPage({
         cards={data.cards}
         fixedTemplates={data.fixedTemplates}
         budgets={data.budgets}
+        accounts={accounts}
       />
     </div>
   );

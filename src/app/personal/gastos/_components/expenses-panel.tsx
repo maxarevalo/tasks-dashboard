@@ -44,6 +44,7 @@ import { ExpenseForm } from "./expense-form";
 import { FixedForm } from "./fixed-form";
 import { BulkImport } from "./bulk-import";
 import { ReplicateDialog } from "./replicate-dialog";
+import { PayDialog, type PayAccount } from "./pay-dialog";
 
 export function ExpensesPanel({
   period,
@@ -51,12 +52,15 @@ export function ExpensesPanel({
   cards,
   fixedTemplates,
   budgets,
+  accounts,
 }: {
   period: Period;
   expenses: ExpenseDTO[];
   cards: CardDTO[];
   fixedTemplates: FixedExpenseDTO[];
   budgets: BudgetDTO[];
+  /** Cuentas de ahorro activas, para elegir de dónde sale un pago. */
+  accounts: PayAccount[];
 }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
@@ -65,6 +69,10 @@ export function ExpensesPanel({
   const [replicateOpen, setReplicateOpen] = useState(false);
   const [budgetFormOpen, setBudgetFormOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<BudgetDTO | null>(null);
+  const [paying, setPaying] = useState<{
+    title: string;
+    items: ExpenseDTO[];
+  } | null>(null);
 
   const openNew = () => {
     setEditing(null);
@@ -148,23 +156,37 @@ export function ExpensesPanel({
                 key={cat}
                 className="overflow-hidden rounded-xl border border-slate-200 bg-white"
               >
-                <header className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {CATEGORY_LABELS[cat]}
+                <header className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2">
+                  <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {CATEGORY_LABELS[cat]}
+                  </span>
+                  <PayGroupButton
+                    items={items}
+                    onPay={(list) =>
+                      setPaying({ title: `Pagar ${CATEGORY_LABELS[cat].toLowerCase()}`, items: list })
+                    }
+                  />
                 </header>
 
                 {cardGroups.length > 1 ? (
                   cardGroups.map((g) => (
                     <div key={g.key} className="border-b border-slate-100 last:border-0">
-                      <div className="flex items-center justify-between gap-2 bg-slate-50/70 px-4 py-1.5">
+                      <div className="flex items-center gap-2 bg-slate-50/70 px-4 py-1.5">
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
                           <CreditCard className="h-3.5 w-3.5" />
                           {g.cardName ?? "Sin tarjeta"}
                         </span>
-                        <span className="text-xs font-semibold tabular-nums text-slate-700">
+                        <span className="ml-auto text-xs font-semibold tabular-nums text-slate-700">
                           {g.subtotal.ARS !== 0 && formatMoney(g.subtotal.ARS, "ARS")}
                           {g.subtotal.ARS !== 0 && g.subtotal.USD !== 0 ? " · " : ""}
                           {g.subtotal.USD !== 0 && formatMoney(g.subtotal.USD, "USD")}
                         </span>
+                        <PayGroupButton
+                          items={g.items}
+                          onPay={(items) =>
+                            setPaying({ title: `Pagar ${g.cardName ?? "gastos sin tarjeta"}`, items })
+                          }
+                        />
                       </div>
                       <ul className="divide-y divide-slate-100">
                         {g.items.map((e) => (
@@ -173,6 +195,7 @@ export function ExpensesPanel({
                             expense={e}
                             onEdit={() => onEdit(e)}
                             onEditFixed={() => onEditFixed(e)}
+                            onPay={() => setPaying({ title: "Pagar gasto", items: [e] })}
                           />
                         ))}
                       </ul>
@@ -186,6 +209,7 @@ export function ExpensesPanel({
                         expense={e}
                         onEdit={() => onEdit(e)}
                         onEditFixed={() => onEditFixed(e)}
+                            onPay={() => setPaying({ title: "Pagar gasto", items: [e] })}
                       />
                     ))}
                   </ul>
@@ -196,8 +220,14 @@ export function ExpensesPanel({
 
           {(previstoItems.length > 0 || budgets.length > 0) && (
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <header className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {CATEGORY_LABELS.previsto}
+              <header className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2">
+                <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {CATEGORY_LABELS.previsto}
+                </span>
+                <PayGroupButton
+                  items={previstoItems}
+                  onPay={(list) => setPaying({ title: "Pagar previstos", items: list })}
+                />
               </header>
 
               {budgets.length > 0 && (
@@ -221,16 +251,22 @@ export function ExpensesPanel({
                   return cardGroups.length > 1 ? (
                     cardGroups.map((g) => (
                       <div key={g.key} className="border-b border-slate-100 last:border-0">
-                        <div className="flex items-center justify-between gap-2 bg-slate-50/70 px-4 py-1.5">
+                        <div className="flex items-center gap-2 bg-slate-50/70 px-4 py-1.5">
                           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
                             <CreditCard className="h-3.5 w-3.5" />
                             {g.cardName ?? "Sin tarjeta"}
                           </span>
-                          <span className="text-xs font-semibold tabular-nums text-slate-700">
+                          <span className="ml-auto text-xs font-semibold tabular-nums text-slate-700">
                             {g.subtotal.ARS !== 0 && formatMoney(g.subtotal.ARS, "ARS")}
                             {g.subtotal.ARS !== 0 && g.subtotal.USD !== 0 ? " · " : ""}
                             {g.subtotal.USD !== 0 && formatMoney(g.subtotal.USD, "USD")}
                           </span>
+                        <PayGroupButton
+                          items={g.items}
+                          onPay={(items) =>
+                            setPaying({ title: `Pagar ${g.cardName ?? "gastos sin tarjeta"}`, items })
+                          }
+                        />
                         </div>
                         <ul className="divide-y divide-slate-100">
                           {g.items.map((e) => (
@@ -239,6 +275,7 @@ export function ExpensesPanel({
                               expense={e}
                               onEdit={() => onEdit(e)}
                               onEditFixed={() => onEditFixed(e)}
+                            onPay={() => setPaying({ title: "Pagar gasto", items: [e] })}
                             />
                           ))}
                         </ul>
@@ -252,6 +289,7 @@ export function ExpensesPanel({
                           expense={e}
                           onEdit={() => onEdit(e)}
                           onEditFixed={() => onEditFixed(e)}
+                            onPay={() => setPaying({ title: "Pagar gasto", items: [e] })}
                         />
                       ))}
                     </ul>
@@ -292,6 +330,13 @@ export function ExpensesPanel({
         items={replicableExpenses}
       />
 
+      <PayDialog
+        title={paying?.title ?? ""}
+        items={paying?.items ?? null}
+        accounts={accounts}
+        onClose={() => setPaying(null)}
+      />
+
       <BudgetForm
         open={budgetFormOpen}
         onClose={() => setBudgetFormOpen(false)}
@@ -299,6 +344,28 @@ export function ExpensesPanel({
         editing={editingBudget}
       />
     </div>
+  );
+}
+
+/** "Pagar (n)": abre el pago de todos los gastos pendientes del grupo. */
+function PayGroupButton({
+  items,
+  onPay,
+}: {
+  items: ExpenseDTO[];
+  onPay: (items: ExpenseDTO[]) => void;
+}) {
+  const unpaid = items.filter((e) => !e.paid);
+  if (unpaid.length === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onPay(unpaid)}
+      className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium normal-case tracking-normal text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+    >
+      <Check className="h-3 w-3" />
+      Pagar ({unpaid.length})
+    </button>
   );
 }
 
@@ -338,10 +405,12 @@ function ExpenseRow({
   expense: e,
   onEdit,
   onEditFixed,
+  onPay,
 }: {
   expense: ExpenseDTO;
   onEdit: () => void;
   onEditFixed: () => void;
+  onPay: () => void;
 }) {
   const { pending, exec } = useAction();
   const isFixed = e.source === "fixed";
@@ -416,13 +485,20 @@ function ExpenseRow({
       <button
         type="button"
         disabled={pending}
-        onClick={() => exec(() => setExpensePaid(e.id, !e.paid))}
+        onClick={() =>
+          e.paid ? exec(() => setExpensePaid(e.id, false)) : onPay()
+        }
         className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors ${
           e.paid
             ? "border-emerald-600 bg-emerald-600 text-white"
             : "border-slate-300 text-transparent hover:border-slate-400"
         }`}
-        aria-label={e.paid ? "Marcar como pendiente" : "Marcar como pagado"}
+        aria-label={e.paid ? "Marcar como pendiente" : "Pagar"}
+        title={
+          e.paid
+            ? "Desmarcar: si salió de una cuenta, la plata vuelve a esa cuenta"
+            : "Pagar"
+        }
       >
         <Check className="h-3 w-3" />
       </button>

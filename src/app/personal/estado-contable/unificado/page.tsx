@@ -109,7 +109,7 @@ export default async function UnificadoPage({
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-xs font-medium text-slate-500">
-                Ingresos del mes
+                Ingresos por cobrar del mes
               </p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
                 {fmt(overview.incomeThisMonth)}
@@ -117,7 +117,7 @@ export default async function UnificadoPage({
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-xs font-medium text-slate-500">
-                Gastos del mes
+                Gastos por pagar del mes
               </p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
                 {fmt(overview.expenseThisMonth)}
