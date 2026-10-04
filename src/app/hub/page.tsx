@@ -13,7 +13,7 @@ export default async function HubPage() {
 
   return (
     <main className="flex min-h-full flex-1 flex-col items-center justify-center p-6">
-      <div className="w-full max-w-3xl">
+      <div className="w-full max-w-4xl">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm text-slate-500">Hola{firstName ? `, ${firstName}` : ""} 👋</p>
@@ -36,7 +36,7 @@ export default async function HubPage() {
           </form>
         </header>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Object.values(sections).map((section) => {
             const Icon = iconMap[section.icon];
             return (

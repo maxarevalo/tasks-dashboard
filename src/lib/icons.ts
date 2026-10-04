@@ -11,6 +11,8 @@ import {
   Landmark,
   BarChart3,
   Car,
+  HeartPulse,
+  Scale,
   type LucideIcon,
 } from "lucide-react";
 
@@ -26,7 +28,9 @@ export type IconName =
   | "repeat"
   | "landmark"
   | "bar-chart-3"
-  | "car";
+  | "car"
+  | "heart-pulse"
+  | "scale";
 
 export const iconMap: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -41,4 +45,6 @@ export const iconMap: Record<IconName, LucideIcon> = {
   landmark: Landmark,
   "bar-chart-3": BarChart3,
   car: Car,
+  "heart-pulse": HeartPulse,
+  scale: Scale,
 };

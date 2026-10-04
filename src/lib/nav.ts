@@ -9,7 +9,7 @@ export type NavItem = {
 };
 
 export type Section = {
-  key: "personal" | "trabajo";
+  key: "personal" | "trabajo" | "salud";
   label: string;
   description: string;
   href: string;
@@ -44,5 +44,17 @@ export const sections: Record<Section["key"], Section> = {
     icon: "briefcase",
     accent: "from-indigo-500 to-violet-600",
     nav: [{ label: "Resumen", href: "/trabajo", icon: "layout-dashboard" }],
+  },
+  salud: {
+    key: "salud",
+    label: "Salud",
+    description: "Seguimiento de tu salud: peso y más.",
+    href: "/salud",
+    icon: "heart-pulse",
+    accent: "from-rose-500 to-pink-600",
+    nav: [
+      { label: "Resumen", href: "/salud", icon: "layout-dashboard" },
+      { label: "Peso", href: "/salud/peso", icon: "scale" },
+    ],
   },
 };
