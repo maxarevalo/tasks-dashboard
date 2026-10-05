@@ -3,6 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { connectToDatabase } from "./db";
 import { Profile, LEGACY_PROFILE_KEY, PROFILE_COOKIE } from "@/models/profile";
+import { getRequestContext } from "./request-context";
 
 export { LEGACY_PROFILE_KEY, PROFILE_COOKIE };
 
@@ -42,8 +43,10 @@ export const listProfiles = cache(async function listProfiles(): Promise<
  */
 export const getActiveProfileKey = cache(
   async function getActiveProfileKey(): Promise<string> {
+    // Pedidos MCP: el perfil viene del token, no de una cookie.
+    const ctxKey = getRequestContext()?.profileKey;
     const [cookieKey, profiles] = await Promise.all([
-      readCookieKey(),
+      ctxKey ? Promise.resolve(ctxKey) : readCookieKey(),
       listProfiles(),
     ]);
     if (cookieKey && profiles.some((p) => p.key === cookieKey)) return cookieKey;

@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireUser } from "@/lib/request-context";
 import { connectToDatabase } from "@/lib/db";
 import { getActiveProfileKey } from "@/lib/profile";
 import { Card, Expense, FixedExpense, Budget } from "@/models/gastos";
@@ -22,8 +22,7 @@ import { SavingsAccount } from "@/models/contable";
 const GASTOS_PATH = "/personal/gastos";
 
 async function requireSession() {
-  const session = await auth();
-  if (!session?.user) throw new Error("No autenticado.");
+  await requireUser();
 }
 
 function revalidate() {
