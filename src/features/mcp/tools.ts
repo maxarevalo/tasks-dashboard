@@ -37,7 +37,15 @@ import {
 import { getPfOverview } from "@/features/pf-dardo/queries";
 import { getAutoOverview } from "@/features/auto/queries";
 import { getWeightOverview } from "@/features/salud/queries";
-import { createWeightEntry } from "@/features/salud/actions";
+import { createWeightEntry, updateWeightEntry } from "@/features/salud/actions";
+import {
+  createFuelLog,
+  createServiceRecord,
+  createUpcomingService,
+  updateFuelLog,
+  updateServiceRecord,
+  updateUpcomingService,
+} from "@/features/auto/actions";
 
 /* ------------------------------- Utilidades ------------------------------ */
 
@@ -358,17 +366,57 @@ export function registerDashboardTools(server: McpServer) {
     "auto",
     {
       title: "Auto",
-      description: "Cargas de combustible, próximos services e historial de services.",
+      description:
+        "Por patente: resumen (gasto en combustible, consumo promedio, próximo service y su estado vencido/pronto/ok), cargas de combustible, próximos services e historial de services, con sus id para editarlos.",
+      inputSchema: z.object({
+        patente: z.string().optional().describe("Filtra por patente; vacío = todas"),
+      }),
       annotations: READ,
     },
-    scoped(async () => text(await getAutoOverview())),
+    scoped(async ({ patente }: { patente?: string }) => {
+      const o = await getAutoOverview();
+      const want = patente?.trim().toUpperCase();
+      const match = (plate: string) => !want || plate === want;
+      const fuel = o.fuelLogs.filter((f) => match(f.plate));
+      const upcoming = o.upcomingServices.filter((u) => match(u.plate));
+      const records = o.serviceRecords.filter((r) => match(r.plate));
+      const plates = o.plates.filter(match);
+      const resumen = plates.map((plate) => {
+        const fl = fuel.filter((f) => f.plate === plate);
+        const km = fl.reduce((a, f) => a + f.km, 0);
+        const liters = fl.reduce((a, f) => a + f.liters, 0);
+        const gasto: Record<string, number> = {};
+        for (const f of fl) gasto[f.currency] = (gasto[f.currency] ?? 0) + f.amount;
+        const next = upcoming
+          .filter((u) => u.plate === plate)
+          .sort((a, b) => (a.nextServiceDate < b.nextServiceDate ? -1 : 1))[0];
+        return {
+          patente: plate,
+          cargas: fl.length,
+          gasto_combustible: gasto,
+          litros_cada_100km_promedio: km > 0 ? Math.round((liters / km) * 1000) / 10 : null,
+          ultima_carga: fl[0]?.date ?? null,
+          proximo_service: next
+            ? { fecha: next.nextServiceDate, detalle: next.description, estado: next.status }
+            : null,
+          services_hechos: records.filter((r) => r.plate === plate).length,
+        };
+      });
+      return text({
+        resumen,
+        cargas_combustible: fuel,
+        proximos_services: upcoming,
+        historial_services: records,
+      });
+    }),
   );
 
   server.registerTool(
     "peso",
     {
       title: "Peso",
-      description: "Últimas mediciones de peso y promedios semanales (lunes a domingo) con su variación.",
+      description:
+        "Últimas mediciones de peso (con id, para corregirlas) y promedios semanales (lunes a domingo) con su variación contra la semana anterior.",
       inputSchema: z.object({ semanas: z.number().int().min(1).max(104).default(12) }),
       annotations: READ,
     },
@@ -745,6 +793,243 @@ export function registerDashboardTools(server: McpServer) {
     ),
   );
 
+  /* --------------------------- Auto (escritura) ------------------------ */
+
+  const autoRead = async () => getAutoOverview();
+  const notFound = (what: string) => fail(`No encontré ${what} con ese id (ver la herramienta auto).`);
+  const plate = z.string().min(1).describe("Patente, ej. AB123CD");
+
+  server.registerTool(
+    "cargar_combustible",
+    {
+      title: "Cargar combustible",
+      description:
+        "Registra una carga de tanque lleno: km recorridos desde la carga anterior (no el odómetro), litros y gasto.",
+      inputSchema: z.object({
+        patente: plate,
+        fecha: date.optional(),
+        km_recorridos: z.number().min(0),
+        litros: z.number().positive(),
+        monto: z.number().positive(),
+        moneda: currency.default("ARS"),
+      }),
+      annotations: WRITE,
+    },
+    scoped(
+      async (a: {
+        patente: string;
+        fecha?: string;
+        km_recorridos: number;
+        litros: number;
+        monto: number;
+        moneda?: "ARS" | "USD";
+      }) =>
+        act(
+          createFuelLog({
+            plate: a.patente,
+            date: a.fecha ?? today().date,
+            km: a.km_recorridos,
+            liters: a.litros,
+            amount: a.monto,
+            currency: a.moneda ?? "ARS",
+          }),
+          `Carga de ${a.litros} l registrada para ${a.patente.toUpperCase()}.`,
+        ),
+    ),
+  );
+
+  server.registerTool(
+    "editar_carga_combustible",
+    {
+      title: "Editar una carga de combustible",
+      description: "Corrige una carga existente; solo cambian los campos que pases.",
+      inputSchema: z.object({
+        id,
+        patente: z.string().min(1).optional(),
+        fecha: date.optional(),
+        km_recorridos: z.number().min(0).optional(),
+        litros: z.number().positive().optional(),
+        monto: z.number().positive().optional(),
+        moneda: currency.optional(),
+      }),
+      annotations: WRITE,
+    },
+    scoped(
+      async (a: {
+        id: string;
+        patente?: string;
+        fecha?: string;
+        km_recorridos?: number;
+        litros?: number;
+        monto?: number;
+        moneda?: "ARS" | "USD";
+      }) => {
+        const cur = (await autoRead()).fuelLogs.find((f) => f.id === a.id);
+        if (!cur) return notFound("una carga de combustible");
+        return act(
+          updateFuelLog(a.id, {
+            plate: a.patente ?? cur.plate,
+            date: a.fecha ?? cur.date,
+            km: a.km_recorridos ?? cur.km,
+            liters: a.litros ?? cur.liters,
+            amount: a.monto ?? cur.amount,
+            currency: a.moneda ?? cur.currency,
+          }),
+          "Carga actualizada.",
+        );
+      },
+    ),
+  );
+
+  server.registerTool(
+    "programar_service",
+    {
+      title: "Programar el próximo service",
+      description: "Agenda un próximo service para una patente (fecha estimada, detalle y mecánico).",
+      inputSchema: z.object({
+        patente: plate,
+        fecha_service: date,
+        detalle: z.string().default(""),
+        mecanico: z.string().default(""),
+      }),
+      annotations: WRITE,
+    },
+    scoped(
+      async (a: { patente: string; fecha_service: string; detalle?: string; mecanico?: string }) =>
+        act(
+          createUpcomingService({
+            plate: a.patente,
+            loadedDate: today().date,
+            nextServiceDate: a.fecha_service,
+            description: a.detalle ?? "",
+            mechanic: a.mecanico ?? "",
+          }),
+          `Service programado para el ${a.fecha_service}.`,
+        ),
+    ),
+  );
+
+  server.registerTool(
+    "editar_proximo_service",
+    {
+      title: "Editar un próximo service",
+      description: "Cambia la fecha, el detalle o el mecánico de un service programado.",
+      inputSchema: z.object({
+        id,
+        patente: z.string().min(1).optional(),
+        fecha_service: date.optional(),
+        detalle: z.string().optional(),
+        mecanico: z.string().optional(),
+      }),
+      annotations: WRITE,
+    },
+    scoped(
+      async (a: {
+        id: string;
+        patente?: string;
+        fecha_service?: string;
+        detalle?: string;
+        mecanico?: string;
+      }) => {
+        const cur = (await autoRead()).upcomingServices.find((u) => u.id === a.id);
+        if (!cur) return notFound("un próximo service");
+        return act(
+          updateUpcomingService(a.id, {
+            plate: a.patente ?? cur.plate,
+            loadedDate: cur.loadedDate,
+            nextServiceDate: a.fecha_service ?? cur.nextServiceDate,
+            description: a.detalle ?? cur.description,
+            mechanic: a.mecanico ?? cur.mechanic,
+          }),
+          "Próximo service actualizado.",
+        );
+      },
+    ),
+  );
+
+  server.registerTool(
+    "registrar_service",
+    {
+      title: "Registrar un service hecho",
+      description: "Agrega al historial un service realizado, con su costo y los repuestos cambiados.",
+      inputSchema: z.object({
+        patente: plate,
+        fecha: date.optional(),
+        detalle: z.string().min(1),
+        monto: z.number().positive(),
+        moneda: currency.default("ARS"),
+        repuestos: z.array(z.string().min(1)).default([]),
+      }),
+      annotations: WRITE,
+    },
+    scoped(
+      async (a: {
+        patente: string;
+        fecha?: string;
+        detalle: string;
+        monto: number;
+        moneda?: "ARS" | "USD";
+        repuestos?: string[];
+      }) =>
+        act(
+          createServiceRecord({
+            plate: a.patente,
+            date: a.fecha ?? today().date,
+            description: a.detalle,
+            amount: a.monto,
+            currency: a.moneda ?? "ARS",
+            parts: a.repuestos ?? [],
+          }),
+          "Service registrado en el historial.",
+        ),
+    ),
+  );
+
+  server.registerTool(
+    "editar_service",
+    {
+      title: "Editar un service del historial",
+      description: "Corrige un service realizado; solo cambian los campos que pases.",
+      inputSchema: z.object({
+        id,
+        patente: z.string().min(1).optional(),
+        fecha: date.optional(),
+        detalle: z.string().min(1).optional(),
+        monto: z.number().positive().optional(),
+        moneda: currency.optional(),
+        repuestos: z.array(z.string().min(1)).optional(),
+      }),
+      annotations: WRITE,
+    },
+    scoped(
+      async (a: {
+        id: string;
+        patente?: string;
+        fecha?: string;
+        detalle?: string;
+        monto?: number;
+        moneda?: "ARS" | "USD";
+        repuestos?: string[];
+      }) => {
+        const cur = (await autoRead()).serviceRecords.find((r) => r.id === a.id);
+        if (!cur) return notFound("un service del historial");
+        return act(
+          updateServiceRecord(a.id, {
+            plate: a.patente ?? cur.plate,
+            date: a.fecha ?? cur.date,
+            description: a.detalle ?? cur.description,
+            amount: a.monto ?? cur.amount,
+            currency: a.moneda ?? cur.currency,
+            parts: a.repuestos ?? cur.parts,
+          }),
+          "Service actualizado.",
+        );
+      },
+    ),
+  );
+
+  /* -------------------------- Salud (escritura) ------------------------- */
+
   server.registerTool(
     "registrar_peso",
     {
@@ -765,5 +1050,33 @@ export function registerDashboardTools(server: McpServer) {
         `Peso de ${a.kg} kg registrado.`,
       ),
     ),
+  );
+
+  server.registerTool(
+    "editar_peso",
+    {
+      title: "Corregir una medición de peso",
+      description: "Cambia el peso o la fecha y hora de una medición (id de la herramienta peso).",
+      inputSchema: z.object({
+        id,
+        kg: z.number().min(20).max(400).optional(),
+        fecha_hora: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Formato YYYY-MM-DDTHH:mm")
+          .optional(),
+      }),
+      annotations: WRITE,
+    },
+    scoped(async (a: { id: string; kg?: number; fecha_hora?: string }) => {
+      const cur = (await getWeightOverview()).entries.find((e) => e.id === a.id);
+      if (!cur) return fail("No encontré esa medición (ver la herramienta peso).");
+      return act(
+        updateWeightEntry(a.id, {
+          takenAt: a.fecha_hora ?? cur.takenAt,
+          weight: a.kg ?? cur.weight,
+        }),
+        "Medición actualizada.",
+      );
+    }),
   );
 }

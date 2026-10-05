@@ -83,8 +83,11 @@ export default async function AuthorizePage({
         <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
           <p className="font-medium">Va a poder:</p>
           <ul className="mt-1 list-inside list-disc space-y-0.5 text-slate-600">
-            <li>Leer gastos, ingresos, ahorros, proyección, estadísticas y peso.</li>
-            <li>Cargar gastos e ingresos, pagar, cobrar, transferir y registrar el peso.</li>
+            <li>Leer gastos, ingresos, ahorros, proyección, estadísticas, auto y peso.</li>
+            <li>
+              Cargar gastos e ingresos, pagar, cobrar y transferir; cargar combustible y
+              services; registrar y corregir el peso.
+            </li>
           </ul>
           <p className="mt-2 text-xs text-slate-500">
             No puede borrar datos. Podés revocar el acceso cuando quieras desde
