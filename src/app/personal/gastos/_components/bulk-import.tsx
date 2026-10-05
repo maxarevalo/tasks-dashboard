@@ -42,6 +42,7 @@ const CATEGORY_OPTIONS: { value: ExpenseCategory; label: string }[] = [
   { value: "prestamo", label: "Préstamo" },
   { value: "fijo", label: "Gasto fijo" },
   { value: "previsto", label: "Previsto" },
+  { value: "no_registrado", label: "No registrado" },
 ];
 
 const JSON_EXAMPLE = `[

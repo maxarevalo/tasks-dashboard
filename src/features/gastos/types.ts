@@ -148,12 +148,14 @@ export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   prestamo: "Préstamos",
   fijo: "Gastos fijos",
   previsto: "Previstos",
+  no_registrado: "No registrados",
 };
 
 export const CATEGORY_ORDER: ExpenseCategory[] = [
   "tarjeta",
   "prestamo",
   "fijo",
+  "no_registrado",
   "previsto",
 ];
 

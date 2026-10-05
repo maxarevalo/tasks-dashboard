@@ -11,6 +11,7 @@ import {
   ExchangeRate,
   AccountMovement,
   IncomeReceipt,
+  Reconciliation,
   DOLLAR_TYPES,
   RATE_BASIS,
 } from "@/models/contable";
@@ -18,6 +19,8 @@ import { applyMovement, revertMovements } from "./movements";
 import { fetchDollar } from "@/lib/exchange";
 import { isValidPeriod, RECURRENCE_FREQUENCIES } from "@/lib/period";
 import { todayStr } from "@/lib/pf";
+import { randomUUID } from "node:crypto";
+import { Expense } from "@/models/gastos";
 import type { ActionResult } from "./types";
 
 const PATH = "/personal/estado-contable";
@@ -337,6 +340,175 @@ export async function undoIncomeReceipt(receiptId: string): Promise<ActionResult
     });
     if (!receipt) return;
     await revertMovements(uid, { receiptId });
+  });
+}
+
+/* --------------------------- Transferencias ---------------------------- */
+
+const objectIdStr = z.string().regex(/^[a-f\d]{24}$/i, "Elegí una cuenta.");
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida.");
+
+const transferInput = z
+  .object({
+    fromId: objectIdStr,
+    toId: objectIdStr,
+    date: dateStr,
+    /** Lo que sale de la cuenta de origen (en su moneda). */
+    amount: z.coerce.number().positive("El monto debe ser mayor a 0."),
+    /** Lo que entra en la de destino; solo hace falta si las monedas difieren. */
+    toAmount: z.coerce.number().positive().optional(),
+    description: z.string().trim().default(""),
+  })
+  .refine((v) => v.fromId !== v.toId, "Elegí dos cuentas distintas.");
+
+/**
+ * Mueve plata entre dos cuentas (ej. caja → FCI, o compra de dólares). No es
+ * gasto ni ingreso: el total de ahorros no cambia, salvo por la conversión.
+ */
+export async function transferBetweenAccounts(
+  input: z.input<typeof transferInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = transferInput.parse(input);
+    const [from, to] = await Promise.all([
+      SavingsAccount.findOne({ _id: data.fromId, userId: uid }).select("name currency").lean(),
+      SavingsAccount.findOne({ _id: data.toId, userId: uid }).select("name currency").lean(),
+    ]);
+    if (!from || !to) throw new Error("Alguna de las cuentas no existe.");
+    const sameCurrency = from.currency === to.currency;
+    const toAmount = sameCurrency ? data.amount : data.toAmount;
+    if (!toAmount) {
+      throw new Error(`Indicá cuánto entró en ${to.name} (en ${to.currency}).`);
+    }
+    const transferId = randomUUID();
+    const label = data.description || `${from.name} → ${to.name}`;
+    try {
+      await applyMovement(uid, {
+        accountId: data.fromId,
+        currency: from.currency as "ARS" | "USD",
+        date: data.date,
+        amount: -data.amount,
+        kind: "transferencia",
+        description: label,
+        transferId,
+      });
+      await applyMovement(uid, {
+        accountId: data.toId,
+        currency: to.currency as "ARS" | "USD",
+        date: data.date,
+        amount: toAmount,
+        kind: "transferencia",
+        description: label,
+        transferId,
+      });
+    } catch (e) {
+      await revertMovements(uid, { transferId });
+      throw e;
+    }
+  });
+}
+
+/** Deshace las dos patas de una transferencia. */
+export async function undoTransfer(transferId: string): Promise<ActionResult> {
+  return run(async (uid) => {
+    await revertMovements(uid, { transferId: z.string().min(1).parse(transferId) });
+  });
+}
+
+/* ---------------------------- Cierre de mes ---------------------------- */
+
+const reconcileInput = z.object({
+  period,
+  date: dateStr,
+  items: z
+    .array(
+      z.object({
+        accountId: objectIdStr,
+        realBalance: z.coerce.number(),
+        /** Si falta plata: registrarla como gasto "No registrado" o solo ajustar el saldo. */
+        missingAs: z.enum(["gasto", "ajuste"]).default("gasto"),
+      }),
+    )
+    .min(1, "Cargá el saldo real de al menos una cuenta."),
+});
+
+/**
+ * Cierre de mes: lleva cada cuenta a su saldo real. Si falta plata, la
+ * diferencia queda como gasto pagado "No registrado" (etiqueta Otros), así
+ * entra en Estadísticas; si sobra (o se elige), queda como ajuste.
+ */
+export async function reconcileAccounts(
+  input: z.input<typeof reconcileInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = reconcileInput.parse(input);
+    const accounts = await SavingsAccount.find({
+      _id: { $in: data.items.map((i) => i.accountId) },
+      userId: uid,
+    })
+      .select("name currency balance")
+      .lean();
+    const byId = new Map(accounts.map((a) => [String(a._id), a]));
+
+    const items = [];
+    for (const item of data.items) {
+      const acc = byId.get(item.accountId);
+      if (!acc) continue;
+      const currency = acc.currency as "ARS" | "USD";
+      const appBalance = (acc.balance as number) ?? 0;
+      const diff = Math.round((item.realBalance - appBalance) * 100) / 100;
+      let mode: "gasto" | "ajuste" | "igual" = "igual";
+
+      if (diff < 0 && item.missingAs === "gasto") {
+        mode = "gasto";
+        const expense = await Expense.create({
+          userId: uid,
+          period: data.period,
+          category: "no_registrado",
+          description: `No registrado · ${acc.name}`,
+          amount: -diff,
+          currency,
+          tag: "Otros",
+          source: "manual",
+          paid: true,
+          paidAt: new Date(`${data.date}T12:00:00`),
+        });
+        await applyMovement(uid, {
+          accountId: item.accountId,
+          currency,
+          date: data.date,
+          amount: diff,
+          kind: "pago",
+          description: `No registrado (cierre de ${data.period})`,
+          expenseId: String(expense._id),
+        });
+      } else if (diff !== 0) {
+        mode = "ajuste";
+        await applyMovement(uid, {
+          accountId: item.accountId,
+          currency,
+          date: data.date,
+          amount: diff,
+          kind: "ajuste",
+          description: `Ajuste por cierre de ${data.period}`,
+        });
+      }
+      items.push({
+        accountId: item.accountId,
+        name: acc.name,
+        currency,
+        appBalance,
+        realBalance: item.realBalance,
+        mode,
+      });
+    }
+
+    await Reconciliation.create({
+      userId: uid,
+      period: data.period,
+      date: data.date,
+      items,
+    });
   });
 }
 
