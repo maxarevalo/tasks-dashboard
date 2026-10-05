@@ -484,7 +484,7 @@ export function registerDashboardTools(server: McpServer) {
         "Distribuye una compra en cuotas mes a mes desde mes_inicio (una cuota por mes, desde cuota_actual hasta total).",
       inputSchema: z.object({
         descripcion: z.string().min(1),
-        monto_cuota: z.number().positive(),
+        monto_cuota: z.number().min(0.01),
         moneda: currency.default("ARS"),
         categoria: z.enum(["tarjeta", "prestamo"]).default("tarjeta"),
         tarjeta_id: id.optional(),
@@ -534,7 +534,7 @@ export function registerDashboardTools(server: McpServer) {
         mes: period.optional(),
         etiqueta: tag,
         moneda: currency.default("ARS"),
-        monto: z.number().positive(),
+        monto: z.number().min(0.01),
       }),
       annotations: WRITE,
     },
@@ -566,7 +566,7 @@ export function registerDashboardTools(server: McpServer) {
       inputSchema: z.object({
         descripcion: z.string().min(1),
         origen: z.string().default(""),
-        monto: z.number().positive(),
+        monto: z.number().min(0.01),
         moneda: currency.default("ARS"),
         tipo: z.enum(["unico", "recurrente"]),
         mes: period.optional().describe("Para único: el mes; para recurrente: desde"),
@@ -616,7 +616,7 @@ export function registerDashboardTools(server: McpServer) {
         "Marca gastos como pagados y descuenta cada monto de la cuenta elegida para su moneda (cada gasto se paga en su moneda). Por defecto paga el monto cargado; un pago menor igual deja el gasto pagado. solo_marcar=true no toca ninguna cuenta.",
       inputSchema: z.object({
         gastos: z
-          .array(z.object({ id, monto: z.number().positive().optional() }))
+          .array(z.object({ id, monto: z.number().min(0.01).optional() }))
           .min(1)
           .describe("Ids de listar_gastos; monto opcional si pagaste distinto"),
         cuenta_ars_id: id.optional(),
@@ -688,7 +688,7 @@ export function registerDashboardTools(server: McpServer) {
         mes: period.optional(),
         fecha: date.optional(),
         repartos: z
-          .array(z.object({ cuenta_id: id, monto: z.number().positive() }))
+          .array(z.object({ cuenta_id: id, monto: z.number().min(0.01) }))
           .min(1),
       }),
       annotations: WRITE,
@@ -721,8 +721,8 @@ export function registerDashboardTools(server: McpServer) {
       inputSchema: z.object({
         desde_id: id,
         hacia_id: id,
-        monto: z.number().positive(),
-        monto_destino: z.number().positive().optional(),
+        monto: z.number().min(0.01),
+        monto_destino: z.number().min(0.01).optional(),
         fecha: date.optional(),
         detalle: z.string().default(""),
       }),
@@ -809,8 +809,8 @@ export function registerDashboardTools(server: McpServer) {
         patente: plate,
         fecha: date.optional(),
         km_recorridos: z.number().min(0),
-        litros: z.number().positive(),
-        monto: z.number().positive(),
+        litros: z.number().min(0.01),
+        monto: z.number().min(0.01),
         moneda: currency.default("ARS"),
       }),
       annotations: WRITE,
@@ -848,8 +848,8 @@ export function registerDashboardTools(server: McpServer) {
         patente: z.string().min(1).optional(),
         fecha: date.optional(),
         km_recorridos: z.number().min(0).optional(),
-        litros: z.number().positive().optional(),
-        monto: z.number().positive().optional(),
+        litros: z.number().min(0.01).optional(),
+        monto: z.number().min(0.01).optional(),
         moneda: currency.optional(),
       }),
       annotations: WRITE,
@@ -956,7 +956,7 @@ export function registerDashboardTools(server: McpServer) {
         patente: plate,
         fecha: date.optional(),
         detalle: z.string().min(1),
-        monto: z.number().positive(),
+        monto: z.number().min(0.01),
         moneda: currency.default("ARS"),
         repuestos: z.array(z.string().min(1)).default([]),
       }),
@@ -995,7 +995,7 @@ export function registerDashboardTools(server: McpServer) {
         patente: z.string().min(1).optional(),
         fecha: date.optional(),
         detalle: z.string().min(1).optional(),
-        monto: z.number().positive().optional(),
+        monto: z.number().min(0.01).optional(),
         moneda: currency.optional(),
         repuestos: z.array(z.string().min(1)).optional(),
       }),
