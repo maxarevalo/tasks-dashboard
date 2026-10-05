@@ -24,7 +24,8 @@ export default auth(function proxy(req) {
 export const config = {
   // Protege todo salvo las rutas de auth, assets estáticos, el favicon y lo
   // que el celular necesita sin sesión para instalar la app (manifest e íconos).
+  // El servidor MCP y OAuth validan su propio token (ver src/lib/oauth.ts).
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/).*)",
+    "/((?!api/auth|api/mcp|api/oauth|\\.well-known|_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/).*)",
   ],
 };

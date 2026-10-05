@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireUser } from "@/lib/request-context";
 import { connectToDatabase } from "@/lib/db";
 import { getActiveProfileKey } from "@/lib/profile";
 import { PlazoFijo } from "@/models/pf-dardo";
@@ -15,8 +15,7 @@ async function run(
   fn: (uid: string) => Promise<void>,
 ): Promise<ActionResult> {
   try {
-    const session = await auth();
-    if (!session?.user) throw new Error("No autenticado.");
+    await requireUser();
     await connectToDatabase();
     const uid = await getActiveProfileKey();
     await fn(uid);

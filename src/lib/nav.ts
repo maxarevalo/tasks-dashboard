@@ -34,6 +34,7 @@ export const sections: Record<Section["key"], Section> = {
       { label: "Estadísticas", href: "/personal/estadisticas", icon: "bar-chart-3" },
       { label: "Auto", href: "/personal/auto", icon: "car" },
       { label: "Tareas pendientes", href: "/personal/tareas", icon: "list-checks" },
+      { label: "Conexiones IA", href: "/personal/conexiones", icon: "plug" },
     ],
   },
   trabajo: {

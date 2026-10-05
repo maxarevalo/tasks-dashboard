@@ -13,6 +13,7 @@ import {
   Car,
   HeartPulse,
   Scale,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,7 +31,8 @@ export type IconName =
   | "bar-chart-3"
   | "car"
   | "heart-pulse"
-  | "scale";
+  | "scale"
+  | "plug";
 
 export const iconMap: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -47,4 +49,5 @@ export const iconMap: Record<IconName, LucideIcon> = {
   car: Car,
   "heart-pulse": HeartPulse,
   scale: Scale,
+  plug: Plug,
 };
