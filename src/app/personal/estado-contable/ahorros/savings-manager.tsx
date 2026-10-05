@@ -9,7 +9,12 @@ import {
   Trash2,
   Star,
   ChevronDown,
+  ArrowLeftRight,
+  Undo2,
+  ClipboardCheck,
 } from "lucide-react";
+import Link from "next/link";
+import { TransferDialog } from "./transfer-dialog";
 import { Modal } from "@/components/modal";
 import { Field, Input, Select, Button, ErrorText } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
@@ -21,6 +26,7 @@ import {
   updateSavingsAccount,
   setSavingsArchived,
   deleteSavingsAccount,
+  undoTransfer,
 } from "@/features/contable/actions";
 import {
   AVAILABILITY_LABELS,
@@ -51,13 +57,30 @@ export function SavingsManager({
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SavingsAccountDTO | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
   const { exec } = useAction();
+  const activeAccounts = accounts.filter((a) => !a.archived);
 
   const grouped = groupByCategory(accounts);
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Link
+          href="/personal/estado-contable/cierre"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <ClipboardCheck className="h-4 w-4" />
+          Cierre de mes
+        </Link>
+        <Button
+          variant="secondary"
+          onClick={() => setTransferOpen(true)}
+          disabled={activeAccounts.length < 2}
+        >
+          <ArrowLeftRight className="h-4 w-4" />
+          Transferir
+        </Button>
         <Button
           onClick={() => {
             setEditing(null);
@@ -68,6 +91,11 @@ export function SavingsManager({
           Nueva cuenta
         </Button>
       </div>
+      <TransferDialog
+        open={transferOpen}
+        accounts={activeAccounts}
+        onClose={() => setTransferOpen(false)}
+      />
 
       {accounts.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
@@ -173,6 +201,7 @@ const KIND_LABELS: Record<AccountMovementDTO["kind"], string> = {
   pago: "Pago",
   cobro: "Cobro",
   ajuste: "Ajuste",
+  transferencia: "Transferencia",
 };
 
 /** Historial plegable de pagos, cobros y ajustes de una cuenta. */
@@ -184,6 +213,7 @@ function AccountMovements({
   movements: AccountMovementDTO[];
 }) {
   const [open, setOpen] = useState(false);
+  const { pending, exec } = useAction();
   if (movements.length === 0) return null;
   return (
     <div className="border-t border-slate-100">
@@ -220,6 +250,18 @@ function AccountMovements({
                 {m.amount > 0 ? "+" : "−"}
                 {formatMoney(Math.abs(m.amount), currency)}
               </span>
+              {m.transferId && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => exec(() => undoTransfer(m.transferId!))}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="Deshacer transferencia"
+                  title="Deshacer la transferencia (en las dos cuentas)"
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                </button>
+              )}
             </li>
           ))}
         </ul>

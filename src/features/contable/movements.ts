@@ -17,6 +17,7 @@ export async function applyMovement(
     description: string;
     expenseId?: string | null;
     receiptId?: string | null;
+    transferId?: string | null;
   },
 ): Promise<void> {
   const account = await SavingsAccount.findOne({
@@ -41,6 +42,7 @@ export async function applyMovement(
     description: m.description,
     expenseId: m.expenseId ?? null,
     receiptId: m.receiptId ?? null,
+    transferId: m.transferId ?? null,
   });
   await SavingsAccount.updateOne(
     { _id: m.accountId, userId: uid },
@@ -51,7 +53,7 @@ export async function applyMovement(
 /** Borra los movimientos que coinciden y devuelve su efecto al saldo de cada cuenta. */
 export async function revertMovements(
   uid: string,
-  filter: { expenseId?: string; receiptId?: string },
+  filter: { expenseId?: string; receiptId?: string; transferId?: string },
 ): Promise<void> {
   const docs = await AccountMovement.find({ userId: uid, ...filter })
     .select("_id accountId amount")

@@ -92,6 +92,8 @@ const CATEGORY_ALIASES: Record<string, ExpenseCategory> = {
   previsto: "previsto",
   previstos: "previsto",
   proyectado: "previsto",
+  "no registrado": "no_registrado",
+  "no registrados": "no_registrado",
 };
 
 function coerceCurrency(v: unknown): Currency | undefined {

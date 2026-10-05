@@ -197,6 +197,7 @@ export function ExpenseForm({
                   <option value="prestamo">Préstamo</option>
                   <option value="fijo">Gasto fijo</option>
                   <option value="previsto">Previsto</option>
+                  <option value="no_registrado">No registrado</option>
                 </>
               )}
             </Select>

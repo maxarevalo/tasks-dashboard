@@ -6,6 +6,7 @@ import {
   ExchangeRate,
   IncomeReceipt,
   AccountMovement,
+  Reconciliation,
 } from "@/models/contable";
 import { getActiveProfileKey } from "@/lib/profile";
 import {
@@ -24,6 +25,7 @@ import type {
   IncomeDTO,
   IncomeReceiptDTO,
   AccountMovementDTO,
+  ReconciliationDTO,
   ContableOverview,
   CurrencyProjection,
   ExchangeRateDTO,
@@ -118,6 +120,29 @@ export async function getIncomes(): Promise<IncomeDTO[]> {
   );
 }
 
+/** Últimos cierres de mes, del más reciente al más viejo. */
+export async function getReconciliations(limit = 6): Promise<ReconciliationDTO[]> {
+  await connectToDatabase();
+  const uid = await getActiveProfileKey();
+  const docs = await Reconciliation.find({ userId: uid })
+    .sort({ date: -1, createdAt: -1 })
+    .limit(limit)
+    .lean();
+  return docs.map((d) => ({
+    id: str(d._id),
+    period: str(d.period),
+    date: str(d.date),
+    items: ((d.items as Lean[]) ?? []).map((i) => ({
+      accountId: str(i.accountId),
+      name: str(i.name),
+      currency: i.currency as Currency,
+      appBalance: (i.appBalance as number) ?? 0,
+      realBalance: (i.realBalance as number) ?? 0,
+      mode: (i.mode as ReconciliationDTO["items"][number]["mode"]) ?? "igual",
+    })),
+  }));
+}
+
 /** Últimos movimientos de cada cuenta (para el historial en Ahorros). */
 export async function getAccountMovements(
   perAccount = 20,
@@ -140,6 +165,7 @@ export async function getAccountMovements(
       amount: (d.amount as number) ?? 0,
       kind: d.kind as AccountMovementDTO["kind"],
       description: str(d.description),
+      transferId: (d.transferId as string) ?? null,
     });
   }
   return out;

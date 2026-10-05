@@ -73,8 +73,24 @@ export type AccountMovementDTO = {
   date: string;
   /** Positivo = entra plata, negativo = sale. */
   amount: number;
-  kind: "pago" | "cobro" | "ajuste";
+  kind: "pago" | "cobro" | "ajuste" | "transferencia";
   description: string;
+  /** Solo transferencias: une la salida con la entrada (para deshacer ambas). */
+  transferId: string | null;
+};
+
+export type ReconciliationDTO = {
+  id: string;
+  period: Period;
+  date: string;
+  items: {
+    accountId: string;
+    name: string;
+    currency: Currency;
+    appBalance: number;
+    realBalance: number;
+    mode: "gasto" | "ajuste" | "igual";
+  }[];
 };
 
 /** Una fila de la proyección, para una moneda y un mes. */

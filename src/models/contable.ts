@@ -130,7 +130,7 @@ export const ExchangeRate =
 
 /* --------------------------- AccountMovement --------------------------- */
 
-export const MOVEMENT_KINDS = ["pago", "cobro", "ajuste"] as const;
+export const MOVEMENT_KINDS = ["pago", "cobro", "ajuste", "transferencia"] as const;
 export type MovementKind = (typeof MOVEMENT_KINDS)[number];
 
 /**
@@ -151,6 +151,8 @@ const accountMovementSchema = new Schema(
     expenseId: { type: Schema.Types.ObjectId, ref: "Expense", default: null },
     /** Cobro de ingreso al que pertenece (kind "cobro"). */
     receiptId: { type: Schema.Types.ObjectId, ref: "IncomeReceipt", default: null },
+    /** Une las dos patas (salida y entrada) de una transferencia entre cuentas. */
+    transferId: { type: String, default: null },
   },
   { timestamps: true },
 );
@@ -186,3 +188,38 @@ incomeReceiptSchema.index({ userId: 1, incomeId: 1, period: 1 }, { unique: true 
 export type IncomeReceiptDoc = InferSchemaType<typeof incomeReceiptSchema>;
 export const IncomeReceipt =
   models.IncomeReceipt ?? model("IncomeReceipt", incomeReceiptSchema);
+
+/* ---------------------------- Reconciliation --------------------------- */
+
+/**
+ * Cierre de mes: foto de lo que decía la app y lo que había de verdad en cada
+ * cuenta. Las diferencias ya quedaron aplicadas como movimientos (gasto "No
+ * registrado" o ajuste); esto es el registro para el historial.
+ */
+const reconciliationSchema = new Schema(
+  {
+    userId: { type: String, required: true, default: OWNER_ID, index: true },
+    period: { type: String, required: true }, // YYYY-MM
+    date: { type: String, required: true }, // YYYY-MM-DD
+    items: {
+      type: [
+        {
+          _id: false,
+          accountId: { type: Schema.Types.ObjectId, ref: "SavingsAccount" },
+          name: { type: String },
+          currency: { type: String, enum: CURRENCY_ENUM },
+          appBalance: { type: Number },
+          realBalance: { type: Number },
+          /** Cómo se registró la diferencia. */
+          mode: { type: String, enum: ["gasto", "ajuste", "igual"] },
+        },
+      ],
+      default: [],
+    },
+  },
+  { timestamps: true },
+);
+
+export type ReconciliationDoc = InferSchemaType<typeof reconciliationSchema>;
+export const Reconciliation =
+  models.Reconciliation ?? model("Reconciliation", reconciliationSchema);

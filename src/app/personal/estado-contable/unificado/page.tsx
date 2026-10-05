@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { Layers, PiggyBank, TrendingUp, Wallet } from "lucide-react";
+import {
+  ClipboardCheck,
+  Layers,
+  PiggyBank,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
 import { formatMoney } from "@/lib/money";
 import { periodLabel } from "@/lib/period";
@@ -63,6 +69,13 @@ export default async function UnificadoPage({
         >
           <Wallet className="h-4 w-4" />
           Detalle por moneda
+        </Link>
+        <Link
+          href="/personal/estado-contable/cierre"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <ClipboardCheck className="h-4 w-4" />
+          Cierre de mes
         </Link>
       </div>
 

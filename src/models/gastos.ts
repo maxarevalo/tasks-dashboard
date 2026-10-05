@@ -9,6 +9,8 @@ export const EXPENSE_CATEGORIES = [
   "prestamo",
   "fijo",
   "previsto",
+  // Plata que salió de una cuenta sin quedar cargada (sale del cierre de mes).
+  "no_registrado",
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 

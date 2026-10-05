@@ -73,7 +73,7 @@ const tag = z
 
 const expenseInput = z.object({
   period,
-  category: z.enum(["tarjeta", "prestamo", "fijo", "previsto"]),
+  category: z.enum(["tarjeta", "prestamo", "fijo", "previsto", "no_registrado"]),
   description: z.string().trim().min(1, "Falta la descripción."),
   amount: signedAmount,
   currency,
@@ -85,7 +85,7 @@ const expenseInput = z.object({
 
 const bulkExpenseInput = z.object({
   period,
-  category: z.enum(["tarjeta", "prestamo", "fijo", "previsto"]),
+  category: z.enum(["tarjeta", "prestamo", "fijo", "previsto", "no_registrado"]),
   description: z.string().trim().min(1),
   amount: signedAmount,
   currency,

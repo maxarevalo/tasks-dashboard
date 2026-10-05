@@ -52,6 +52,8 @@ export function Summary({ summary }: { summary: MonthSummary }) {
           <tbody>
             {CATEGORY_ORDER.map((cat) => {
               const v = summary.byCategory[cat];
+              // "No registrados" solo aparece en los meses con un cierre que lo generó.
+              if (cat === "no_registrado" && !v.ARS && !v.USD) return null;
               return (
                 <tr key={cat} className="border-b border-slate-100 last:border-0">
                   <td className="px-4 py-2 text-slate-700">
