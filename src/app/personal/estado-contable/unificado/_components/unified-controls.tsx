@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@/components/navigation-progress";
 import type { Currency } from "@/lib/money";
 
 const HORIZONS = [3, 6, 12, 24];
@@ -12,9 +12,9 @@ export function UnifiedControls({
   currency: Currency;
   horizon: number;
 }) {
-  const router = useRouter();
+  const { push } = useNavigate();
   const go = (en: Currency, h: number) =>
-    router.push(`/personal/estado-contable/unificado?en=${en}&h=${h}`);
+    push(`/personal/estado-contable/unificado?en=${en}&h=${h}`);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
