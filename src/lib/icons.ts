@@ -14,6 +14,7 @@ import {
   HeartPulse,
   Scale,
   Plug,
+  CircleHelp,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,7 +33,8 @@ export type IconName =
   | "car"
   | "heart-pulse"
   | "scale"
-  | "plug";
+  | "plug"
+  | "help";
 
 export const iconMap: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -50,4 +52,5 @@ export const iconMap: Record<IconName, LucideIcon> = {
   "heart-pulse": HeartPulse,
   scale: Scale,
   plug: Plug,
+  help: CircleHelp,
 };
