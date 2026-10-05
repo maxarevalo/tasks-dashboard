@@ -27,6 +27,7 @@ import type {
 } from "@/features/contable/types";
 import { dateLabel } from "@/lib/pf";
 import { ReceiveDialog } from "./receive-dialog";
+import { useClearActionParam } from "@/lib/use-clear-action";
 
 const FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
   monthly: "mensual",
@@ -71,18 +72,34 @@ function suggestedPeriod(inc: IncomeDTO, now: Period): Period {
 export function IncomeManager({
   incomes,
   accounts,
+  initialAction,
 }: {
   incomes: IncomeDTO[];
   accounts: SavingsAccountDTO[];
+  /** Acceso directo: abre "Nuevo ingreso" o "Cobrar" al entrar. */
+  initialAction?: "cargar" | "cobrar";
 }) {
-  const [open, setOpen] = useState(false);
+  useClearActionParam(initialAction);
+  const now = currentPeriod();
+  // Ingresos que corresponden a este mes y todavía no se cobraron.
+  const pendingNow = incomes.filter(
+    (inc) => appliesTo(inc, now) && !inc.receipts.some((r) => r.period === now),
+  );
+  const [open, setOpen] = useState(initialAction === "cargar");
   const [editing, setEditing] = useState<IncomeDTO | null>(null);
   const [receiving, setReceiving] = useState<{
     income: IncomeDTO;
     period: Period;
-  } | null>(null);
+  } | null>(() =>
+    initialAction === "cobrar" && pendingNow.length === 1
+      ? { income: pendingNow[0], period: now }
+      : null,
+  );
+  // Con varios (o ningún) ingreso por cobrar, primero se elige cuál.
+  const [picking, setPicking] = useState(
+    initialAction === "cobrar" && pendingNow.length !== 1,
+  );
   const { exec } = useAction();
-  const now = currentPeriod();
 
   const grouped = groupByOrigin(incomes);
 
@@ -200,6 +217,17 @@ export function IncomeManager({
       ))}
 
       <IncomeForm open={open} onClose={() => setOpen(false)} editing={editing} />
+      <ReceivePicker
+        open={picking}
+        incomes={incomes.filter((i) => i.active)}
+        pending={pendingNow}
+        now={now}
+        onPick={(inc) => {
+          setPicking(false);
+          setReceiving({ income: inc, period: suggestedPeriod(inc, now) });
+        }}
+        onClose={() => setPicking(false)}
+      />
       <ReceiveDialog
         income={receiving?.income ?? null}
         period={receiving?.period ?? now}
@@ -212,6 +240,76 @@ export function IncomeManager({
         ))}
       </datalist>
     </div>
+  );
+}
+
+/** Elegir qué ingreso cobrar (acceso directo "Cobrar un ingreso"). */
+function ReceivePicker({
+  open,
+  incomes,
+  pending,
+  now,
+  onPick,
+  onClose,
+}: {
+  open: boolean;
+  incomes: IncomeDTO[];
+  pending: IncomeDTO[];
+  now: Period;
+  onPick: (inc: IncomeDTO) => void;
+  onClose: () => void;
+}) {
+  const others = incomes.filter((i) => !pending.includes(i));
+  const row = (inc: IncomeDTO, isPending: boolean) => (
+    <li key={inc.id}>
+      <button
+        type="button"
+        onClick={() => onPick(inc)}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-slate-900">
+            {inc.description}
+          </span>
+          <span className="text-xs text-slate-500">
+            {formatMoney(inc.amount, inc.currency)} {inc.currency}
+            {inc.origin ? ` · ${inc.origin}` : ""}
+          </span>
+        </span>
+        {isPending && (
+          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+            {periodShortLabel(now)}: por cobrar
+          </span>
+        )}
+      </button>
+    </li>
+  );
+  return (
+    <Modal open={open} onClose={onClose} title="¿Qué ingreso cobraste?">
+      {incomes.length === 0 ? (
+        <p className="text-sm text-slate-500">
+          Todavía no cargaste ingresos. Cargá uno con “Nuevo ingreso”.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {pending.length > 0 && (
+            <ul className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+              {pending.map((i) => row(i, true))}
+            </ul>
+          )}
+          {others.length > 0 && (
+            <>
+              {pending.length > 0 && (
+                <p className="text-xs font-medium text-slate-500">Otros ingresos</p>
+              )}
+              <ul className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                {others.map((i) => row(i, false))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }
 

@@ -6,7 +6,12 @@ import { IncomeManager } from "./income-manager";
 
 export const dynamic = "force-dynamic";
 
-export default async function IngresosPage() {
+export default async function IngresosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ accion?: string }>;
+}) {
+  const { accion } = await searchParams;
   const [incomes, accounts] = await Promise.all([
     getIncomes(),
     getSavingsAccounts(false),
@@ -28,7 +33,13 @@ export default async function IngresosPage() {
         icon={TrendingUp}
       />
 
-      <IncomeManager incomes={incomes} accounts={accounts} />
+      <IncomeManager
+        incomes={incomes}
+        accounts={accounts}
+        initialAction={
+          accion === "cargar" || accion === "cobrar" ? accion : undefined
+        }
+      />
     </div>
   );
 }

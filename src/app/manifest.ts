@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { SHORTCUTS } from "@/lib/shortcuts";
 
 /** Manifest de la PWA: permite instalar el dashboard en el celular como una app. */
 export default function manifest(): MetadataRoute.Manifest {
@@ -23,5 +24,13 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: "maskable",
       },
     ],
+    // Accesos directos: aparecen al mantener apretado el ícono de la app
+    // instalada (Android y escritorio). Cada uno abre el diálogo correspondiente.
+    shortcuts: SHORTCUTS.map((sc) => ({
+      name: sc.name,
+      short_name: sc.short,
+      url: sc.href,
+      icons: [{ src: sc.icon, sizes: "96x96", type: "image/png" }],
+    })),
   };
 }
