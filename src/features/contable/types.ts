@@ -56,6 +56,25 @@ export type IncomeDTO = {
   frequency: RecurrenceFrequency;
   confirmed: boolean;
   active: boolean;
+  /** Cobros reales registrados (un mes cobrado ya no suma el estimado en la proyección). */
+  receipts: IncomeReceiptDTO[];
+};
+
+export type IncomeReceiptDTO = {
+  id: string;
+  period: Period;
+  date: string;
+  amount: number;
+};
+
+export type AccountMovementDTO = {
+  id: string;
+  accountId: string;
+  date: string;
+  /** Positivo = entra plata, negativo = sale. */
+  amount: number;
+  kind: "pago" | "cobro" | "ajuste";
+  description: string;
 };
 
 /** Una fila de la proyección, para una moneda y un mes. */

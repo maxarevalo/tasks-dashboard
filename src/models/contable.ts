@@ -127,3 +127,62 @@ const exchangeRateSchema = new Schema(
 export type ExchangeRateDoc = InferSchemaType<typeof exchangeRateSchema>;
 export const ExchangeRate =
   models.ExchangeRate ?? model("ExchangeRate", exchangeRateSchema);
+
+/* --------------------------- AccountMovement --------------------------- */
+
+export const MOVEMENT_KINDS = ["pago", "cobro", "ajuste"] as const;
+export type MovementKind = (typeof MOVEMENT_KINDS)[number];
+
+/**
+ * Entrada o salida de plata de una cuenta de ahorro: el pago de un gasto, el
+ * cobro de un ingreso o un ajuste manual del saldo. El saldo de la cuenta ya
+ * incluye el movimiento (se aplica con $inc al crearlo y se revierte al borrarlo).
+ */
+const accountMovementSchema = new Schema(
+  {
+    userId: { type: String, required: true, default: OWNER_ID, index: true },
+    accountId: { type: Schema.Types.ObjectId, ref: "SavingsAccount", required: true },
+    date: { type: String, required: true }, // YYYY-MM-DD
+    /** Positivo = entra plata, negativo = sale. */
+    amount: { type: Number, required: true },
+    kind: { type: String, enum: MOVEMENT_KINDS, required: true },
+    description: { type: String, trim: true, default: "" },
+    /** Gasto pagado con este movimiento (kind "pago"). */
+    expenseId: { type: Schema.Types.ObjectId, ref: "Expense", default: null },
+    /** Cobro de ingreso al que pertenece (kind "cobro"). */
+    receiptId: { type: Schema.Types.ObjectId, ref: "IncomeReceipt", default: null },
+  },
+  { timestamps: true },
+);
+
+accountMovementSchema.index({ userId: 1, accountId: 1, date: -1 });
+accountMovementSchema.index({ userId: 1, expenseId: 1 });
+
+export type AccountMovementDoc = InferSchemaType<typeof accountMovementSchema>;
+export const AccountMovement =
+  models.AccountMovement ?? model("AccountMovement", accountMovementSchema);
+
+/* ---------------------------- IncomeReceipt ---------------------------- */
+
+/**
+ * Cobro real de un ingreso en un mes: el monto efectivamente cobrado (puede
+ * diferir del estimado). Se reparte en una o más cuentas como movimientos
+ * "cobro". Un mes con cobro deja de sumar el ingreso estimado en la proyección.
+ */
+const incomeReceiptSchema = new Schema(
+  {
+    userId: { type: String, required: true, default: OWNER_ID, index: true },
+    incomeId: { type: Schema.Types.ObjectId, ref: "Income", required: true },
+    period: { type: String, required: true }, // YYYY-MM
+    date: { type: String, required: true }, // YYYY-MM-DD
+    amount: { type: Number, required: true, min: 0 },
+    currency: { type: String, enum: CURRENCY_ENUM, required: true },
+  },
+  { timestamps: true },
+);
+
+incomeReceiptSchema.index({ userId: 1, incomeId: 1, period: 1 }, { unique: true });
+
+export type IncomeReceiptDoc = InferSchemaType<typeof incomeReceiptSchema>;
+export const IncomeReceipt =
+  models.IncomeReceipt ?? model("IncomeReceipt", incomeReceiptSchema);

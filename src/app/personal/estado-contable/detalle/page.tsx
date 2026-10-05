@@ -102,11 +102,11 @@ export default async function DetallePage({
             />
           </div>
           <p className="mt-1 text-[11px] text-slate-400">
-            Ahorros + ingresos − gastos del mes
+            Ahorros + lo que falta cobrar − lo que falta pagar
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-medium text-slate-500">Ingresos del mes</p>
+          <p className="text-xs font-medium text-slate-500">Ingresos por cobrar del mes</p>
           <div className="mt-1">
             <Money
               ars={overview.incomeThisMonth.ARS}
@@ -115,7 +115,7 @@ export default async function DetallePage({
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-medium text-slate-500">Gastos del mes</p>
+          <p className="text-xs font-medium text-slate-500">Gastos por pagar del mes</p>
           <div className="mt-1">
             <Money
               ars={overview.expenseThisMonth.ARS}

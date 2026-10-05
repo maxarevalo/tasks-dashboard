@@ -9,11 +9,15 @@ import {
   SavingsAccount,
   Income,
   ExchangeRate,
+  AccountMovement,
+  IncomeReceipt,
   DOLLAR_TYPES,
   RATE_BASIS,
 } from "@/models/contable";
+import { applyMovement, revertMovements } from "./movements";
 import { fetchDollar } from "@/lib/exchange";
 import { isValidPeriod, RECURRENCE_FREQUENCIES } from "@/lib/period";
+import { todayStr } from "@/lib/pf";
 import type { ActionResult } from "./types";
 
 const PATH = "/personal/estado-contable";
@@ -95,10 +99,25 @@ export async function updateSavingsAccount(
         { $set: { receivesNet: false } },
       );
     }
+    const before = await SavingsAccount.findOne({ _id: id, userId: uid })
+      .select("balance")
+      .lean();
     await SavingsAccount.updateOne(
       { _id: id, userId: uid },
       { $set: data },
     );
+    // Un cambio de saldo hecho a mano queda en el historial como ajuste.
+    const diff = data.balance - ((before?.balance as number) ?? 0);
+    if (before && Math.abs(diff) >= 0.005) {
+      await AccountMovement.create({
+        userId: uid,
+        accountId: id,
+        date: todayStr(),
+        amount: diff,
+        kind: "ajuste",
+        description: "Ajuste manual del saldo",
+      });
+    }
   });
 }
 
@@ -117,6 +136,7 @@ export async function setSavingsArchived(
 export async function deleteSavingsAccount(id: string): Promise<ActionResult> {
   return run(async (uid) => {
     await SavingsAccount.deleteOne({ _id: id, userId: uid });
+    await AccountMovement.deleteMany({ userId: uid, accountId: id });
   });
 }
 
@@ -234,6 +254,89 @@ export async function setIncomeActive(
 export async function deleteIncome(id: string): Promise<ActionResult> {
   return run(async (uid) => {
     await Income.deleteOne({ _id: id, userId: uid });
+    // Los cobros ya registrados se olvidan, pero la plata cobrada queda en las cuentas.
+    await IncomeReceipt.deleteMany({ userId: uid, incomeId: id });
+  });
+}
+
+/* ------------------------------ Cobros -------------------------------- */
+
+const receiveInput = z.object({
+  incomeId: z.string().regex(/^[a-f\d]{24}$/i, "Id inválido"),
+  period,
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida."),
+  /** A qué cuenta(s) entró la plata; la suma es el monto cobrado. */
+  splits: z
+    .array(
+      z.object({
+        accountId: z.string().regex(/^[a-f\d]{24}$/i, "Elegí una cuenta."),
+        amount: z.coerce.number().positive("Cada monto debe ser mayor a 0."),
+      }),
+    )
+    .min(1, "Indicá a qué cuenta entró la plata."),
+});
+
+/**
+ * Registra el cobro real de un ingreso en un mes: suma la plata a la(s)
+ * cuenta(s) elegida(s) y, desde ahí, la proyección deja de sumar el ingreso
+ * estimado para ese mes.
+ */
+export async function receiveIncome(
+  input: z.input<typeof receiveInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = receiveInput.parse(input);
+    const income = await Income.findOne({ _id: data.incomeId, userId: uid })
+      .select("description currency")
+      .lean();
+    if (!income) throw new Error("No se encontró el ingreso.");
+    const exists = await IncomeReceipt.exists({
+      userId: uid,
+      incomeId: data.incomeId,
+      period: data.period,
+    });
+    if (exists) throw new Error("Ese ingreso ya figura cobrado en ese mes.");
+
+    const currency = income.currency as "ARS" | "USD";
+    const total = data.splits.reduce((acc, s) => acc + s.amount, 0);
+    const receipt = await IncomeReceipt.create({
+      userId: uid,
+      incomeId: data.incomeId,
+      period: data.period,
+      date: data.date,
+      amount: total,
+      currency,
+    });
+    try {
+      for (const s of data.splits) {
+        await applyMovement(uid, {
+          accountId: s.accountId,
+          currency,
+          date: data.date,
+          amount: s.amount,
+          kind: "cobro",
+          description: String(income.description),
+          receiptId: String(receipt._id),
+        });
+      }
+    } catch (e) {
+      // Si una cuenta no es válida, no queda un cobro a medias.
+      await revertMovements(uid, { receiptId: String(receipt._id) });
+      await IncomeReceipt.deleteOne({ _id: receipt._id });
+      throw e;
+    }
+  });
+}
+
+/** Deshace un cobro: saca la plata de las cuentas y el ingreso vuelve a estar pendiente. */
+export async function undoIncomeReceipt(receiptId: string): Promise<ActionResult> {
+  return run(async (uid) => {
+    const receipt = await IncomeReceipt.findOneAndDelete({
+      _id: receiptId,
+      userId: uid,
+    });
+    if (!receipt) return;
+    await revertMovements(uid, { receiptId });
   });
 }
 

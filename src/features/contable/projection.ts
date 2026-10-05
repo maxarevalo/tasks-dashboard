@@ -16,6 +16,8 @@ function incomeForMonth(
   let total = 0;
   for (const inc of incomes) {
     if (inc.currency !== currency || !inc.active) continue;
+    // Ya cobrado: la plata está en las cuentas, no se suma otra vez.
+    if (inc.receipts.some((r) => r.period === period)) continue;
     if (inc.kind === "oneoff") {
       if (inc.period === period) total += inc.amount;
     } else {

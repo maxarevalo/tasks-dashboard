@@ -1,6 +1,12 @@
 import "server-only";
 import { connectToDatabase } from "@/lib/db";
-import { SavingsAccount, Income, ExchangeRate } from "@/models/contable";
+import {
+  SavingsAccount,
+  Income,
+  ExchangeRate,
+  IncomeReceipt,
+  AccountMovement,
+} from "@/models/contable";
 import { getActiveProfileKey } from "@/lib/profile";
 import {
   currentPeriod,
@@ -16,6 +22,8 @@ import { buildProjection } from "./projection";
 import type {
   SavingsAccountDTO,
   IncomeDTO,
+  IncomeReceiptDTO,
+  AccountMovementDTO,
   ContableOverview,
   CurrencyProjection,
   ExchangeRateDTO,
@@ -52,7 +60,7 @@ function mapAccount(doc: Lean): SavingsAccountDTO {
   };
 }
 
-function mapIncome(doc: Lean): IncomeDTO {
+function mapIncome(doc: Lean, receipts: IncomeReceiptDTO[]): IncomeDTO {
   return {
     id: str(doc._id),
     description: str(doc.description),
@@ -66,6 +74,7 @@ function mapIncome(doc: Lean): IncomeDTO {
     frequency: (doc.frequency as IncomeDTO["frequency"]) ?? "monthly",
     confirmed: doc.confirmed !== false,
     active: doc.active !== false,
+    receipts,
   };
 }
 
@@ -85,10 +94,55 @@ export async function getSavingsAccounts(
 export async function getIncomes(): Promise<IncomeDTO[]> {
   await connectToDatabase();
   const uid = await getActiveProfileKey();
-  const docs = await Income.find({ userId: uid })
-    .sort({ active: -1, origin: 1, description: 1 })
+  const [docs, receiptDocs] = await Promise.all([
+    Income.find({ userId: uid })
+      .sort({ active: -1, origin: 1, description: 1 })
+      .lean(),
+    IncomeReceipt.find({ userId: uid }).sort({ period: 1 }).lean(),
+  ]);
+  const receiptsByIncome = new Map<string, IncomeReceiptDTO[]>();
+  for (const r of receiptDocs) {
+    const k = str(r.incomeId);
+    receiptsByIncome.set(k, [
+      ...(receiptsByIncome.get(k) ?? []),
+      {
+        id: str(r._id),
+        period: str(r.period),
+        date: str(r.date),
+        amount: (r.amount as number) ?? 0,
+      },
+    ]);
+  }
+  return docs.map((d) =>
+    mapIncome(d as Lean, receiptsByIncome.get(str(d._id)) ?? []),
+  );
+}
+
+/** Últimos movimientos de cada cuenta (para el historial en Ahorros). */
+export async function getAccountMovements(
+  perAccount = 20,
+): Promise<Record<string, AccountMovementDTO[]>> {
+  await connectToDatabase();
+  const uid = await getActiveProfileKey();
+  const docs = await AccountMovement.find({ userId: uid })
+    .sort({ date: -1, createdAt: -1 })
+    .limit(1000)
     .lean();
-  return docs.map((d) => mapIncome(d as Lean));
+  const out: Record<string, AccountMovementDTO[]> = {};
+  for (const d of docs) {
+    const k = str(d.accountId);
+    const list = (out[k] ??= []);
+    if (list.length >= perAccount) continue;
+    list.push({
+      id: str(d._id),
+      accountId: k,
+      date: str(d.date),
+      amount: (d.amount as number) ?? 0,
+      kind: d.kind as AccountMovementDTO["kind"],
+      description: str(d.description),
+    });
+  }
+  return out;
 }
 
 function incomeForMonth(
@@ -99,6 +153,8 @@ function incomeForMonth(
   let total = 0;
   for (const inc of incomes) {
     if (inc.currency !== currency || !inc.active) continue;
+    // Ya cobrado: la plata está en las cuentas, no se suma otra vez.
+    if (inc.receipts.some((r) => r.period === period)) continue;
     if (inc.kind === "oneoff") {
       if (inc.period === period) total += inc.amount;
     } else if (

@@ -186,9 +186,11 @@ const tagKey = (period: Period, tag: unknown, currency: unknown) =>
   `${period}|${String(tag)}|${String(currency)}`;
 
 /**
- * Total de gastos por mes y moneda, para la proyección del módulo contable.
- * Incluye lo materializado + las plantillas de gastos fijos activas que
- * todavía no se cargaron en ese mes (así la proyección contempla los fijos).
+ * Gastos que todavía hay que pagar, por mes y moneda, para la proyección del
+ * módulo contable. Incluye lo materializado sin pagar + las plantillas de
+ * gastos fijos activas que todavía no se cargaron en ese mes + lo disponible
+ * de los presupuestos por etiqueta. Lo ya pagado no se cuenta: ya salió de
+ * las cuentas de ahorro.
  */
 export async function getProjectedExpenseTotals(
   periods: Period[],
@@ -202,7 +204,7 @@ export async function getProjectedExpenseTotals(
 
   const [expenseDocs, fixedDocs, budgetDocs] = await Promise.all([
     Expense.find({ userId: uid, period: { $in: periods } })
-      .select("period amount currency fixedId tag")
+      .select("period amount currency fixedId tag paid")
       .lean(),
     FixedExpense.find({ userId: uid, active: true })
       .select("amount currency startPeriod endPeriod skipPeriods frequency tag")
@@ -223,7 +225,9 @@ export async function getProjectedExpenseTotals(
     const p = String(e.period);
     if (!result[p]) continue;
     const cur = (e.currency as "ARS" | "USD") ?? "ARS";
-    result[p][cur] += (e.amount as number) ?? 0;
+    // Lo ya pagado salió de las cuentas: no se vuelve a restar en la proyección
+    // (pero sí cuenta como gastado para los presupuestos por etiqueta).
+    if (!e.paid) result[p][cur] += (e.amount as number) ?? 0;
     addSpent(p, e.tag, cur, (e.amount as number) ?? 0);
     if (e.fixedId) materialized.add(`${p}|${String(e.fixedId)}`);
   }

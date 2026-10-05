@@ -16,6 +16,8 @@ import {
 } from "@/lib/period";
 import { EXPENSE_TAGS } from "@/lib/tags";
 import type { ActionResult, DupStatus } from "./types";
+import { applyMovement, revertMovements } from "@/features/contable/movements";
+import { SavingsAccount } from "@/models/contable";
 
 const GASTOS_PATH = "/personal/gastos";
 
@@ -434,6 +436,92 @@ export async function setExpensePaid(
       { _id: id, userId: uid },
       { $set: { paid, paidAt: paid ? new Date() : null } },
     );
+    // Si se desmarca, la plata que salió de una cuenta al pagarlo vuelve a esa cuenta.
+    if (!paid) await revertMovements(uid, { expenseId: id });
+  });
+}
+
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida.");
+
+const payInput = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().regex(/^[a-f\d]{24}$/i, "Id inválido"),
+        amount: z.coerce.number().positive("El monto pagado debe ser mayor a 0."),
+      }),
+    )
+    .min(1, "No elegiste ningún gasto."),
+  date: dateStr,
+  /** Cuenta de la que sale la plata, por moneda. */
+  accounts: z.object({
+    ARS: z.string().optional(),
+    USD: z.string().optional(),
+  }),
+  /** true = solo marcar pagado, sin descontar de ninguna cuenta. */
+  skipAccounts: z.boolean().default(false),
+});
+
+/**
+ * Paga uno o varios gastos: cada uno queda pagado y, salvo `skipAccounts`,
+ * descuenta el monto pagado de la cuenta elegida para su moneda. Un pago por
+ * menos de lo cargado igual deja el gasto pagado (lo que falte se carga aparte).
+ */
+export async function payExpenses(
+  input: z.input<typeof payInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = payInput.parse(input);
+    const docs = await Expense.find({
+      _id: { $in: data.items.map((i) => i.id) },
+      userId: uid,
+    })
+      .select("description currency paid")
+      .lean();
+    const byId = new Map(docs.map((d) => [String(d._id), d]));
+
+    // Antes de pagar nada, que haya una cuenta válida para cada moneda involucrada.
+    if (!data.skipAccounts) {
+      const currencies = new Set(
+        docs.filter((d) => !d.paid).map((d) => d.currency as "ARS" | "USD"),
+      );
+      for (const c of currencies) {
+        const accountId = data.accounts[c];
+        if (!accountId) throw new Error(`Elegí de qué cuenta en ${c} sale el pago.`);
+        const ok = await SavingsAccount.exists({
+          _id: accountId,
+          userId: uid,
+          currency: c,
+          archived: { $ne: true },
+        });
+        if (!ok) throw new Error(`La cuenta elegida para ${c} no es válida.`);
+      }
+    }
+
+    for (const item of data.items) {
+      const doc = byId.get(item.id);
+      if (!doc || doc.paid) continue; // inexistente o ya pagado: no se paga dos veces
+      const currency = doc.currency as "ARS" | "USD";
+      if (!data.skipAccounts) {
+        const accountId = data.accounts[currency];
+        if (!accountId) {
+          throw new Error(`Elegí de qué cuenta en ${currency} sale el pago.`);
+        }
+        await applyMovement(uid, {
+          accountId,
+          currency,
+          date: data.date,
+          amount: -item.amount,
+          kind: "pago",
+          description: String(doc.description),
+          expenseId: item.id,
+        });
+      }
+      await Expense.updateOne(
+        { _id: item.id, userId: uid },
+        { $set: { paid: true, paidAt: new Date(`${data.date}T12:00:00`) } },
+      );
+    }
   });
 }
 

@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { ArrowLeft, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
-import { getIncomes } from "@/features/contable/queries";
+import { getIncomes, getSavingsAccounts } from "@/features/contable/queries";
 import { IncomeManager } from "./income-manager";
 
 export const dynamic = "force-dynamic";
 
 export default async function IngresosPage() {
-  const incomes = await getIncomes();
+  const [incomes, accounts] = await Promise.all([
+    getIncomes(),
+    getSavingsAccounts(false),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -25,7 +28,7 @@ export default async function IngresosPage() {
         icon={TrendingUp}
       />
 
-      <IncomeManager incomes={incomes} />
+      <IncomeManager incomes={incomes} accounts={accounts} />
     </div>
   );
 }

@@ -1,19 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Power } from "lucide-react";
+import { Plus, Pencil, Trash2, Power, HandCoins, Undo2 } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { Field, Input, Select, Button, ErrorText } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
-import { addMonths, currentPeriod, periodShortLabel } from "@/lib/period";
+import {
+  addMonths,
+  currentPeriod,
+  periodMatchesCadence,
+  periodShortLabel,
+  type Period,
+} from "@/lib/period";
 import { useAction } from "@/features/contable/use-action";
 import {
   createIncome,
   updateIncome,
   setIncomeActive,
   deleteIncome,
+  undoIncomeReceipt,
 } from "@/features/contable/actions";
-import type { IncomeDTO, RecurrenceFrequency } from "@/features/contable/types";
+import type {
+  IncomeDTO,
+  RecurrenceFrequency,
+  SavingsAccountDTO,
+} from "@/features/contable/types";
+import { dateLabel } from "@/lib/pf";
+import { ReceiveDialog } from "./receive-dialog";
 
 const FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
   monthly: "mensual",
@@ -37,10 +50,39 @@ const ORIGIN_SUGGESTIONS = [
   "Reintegro",
 ];
 
-export function IncomeManager({ incomes }: { incomes: IncomeDTO[] }) {
+/** true si el ingreso corresponde a ese mes (según su tipo, vigencia y frecuencia). */
+function appliesTo(inc: IncomeDTO, p: Period): boolean {
+  if (!inc.active) return false;
+  if (inc.kind === "oneoff") return inc.period === p;
+  if (!inc.startPeriod || p < inc.startPeriod) return false;
+  if (inc.endPeriod && p > inc.endPeriod) return false;
+  return periodMatchesCadence(inc.startPeriod, p, inc.frequency);
+}
+
+/** Mes sugerido para cobrar: el actual si corresponde, si no el próximo que corresponda sin cobrar. */
+function suggestedPeriod(inc: IncomeDTO, now: Period): Period {
+  for (let i = 0; i < 13; i++) {
+    const p = addMonths(now, i);
+    if (appliesTo(inc, p) && !inc.receipts.some((r) => r.period === p)) return p;
+  }
+  return inc.kind === "oneoff" && inc.period ? inc.period : now;
+}
+
+export function IncomeManager({
+  incomes,
+  accounts,
+}: {
+  incomes: IncomeDTO[];
+  accounts: SavingsAccountDTO[];
+}) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<IncomeDTO | null>(null);
+  const [receiving, setReceiving] = useState<{
+    income: IncomeDTO;
+    period: Period;
+  } | null>(null);
   const { exec } = useAction();
+  const now = currentPeriod();
 
   const grouped = groupByOrigin(incomes);
 
@@ -100,7 +142,24 @@ export function IncomeManager({ incomes }: { incomes: IncomeDTO[] }) {
                         }`
                       : `único en ${periodShortLabel(inc.period ?? currentPeriod())}`}
                   </p>
+                  <ReceiptStatus
+                    income={inc}
+                    now={now}
+                    onUndo={(id) => exec(() => undoIncomeReceipt(id))}
+                  />
                 </div>
+                {inc.active && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReceiving({ income: inc, period: suggestedPeriod(inc, now) })
+                    }
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <HandCoins className="h-3.5 w-3.5" />
+                    Cobrar
+                  </button>
+                )}
                 {inc.kind === "recurring" && (
                   <button
                     type="button"
@@ -141,11 +200,62 @@ export function IncomeManager({ incomes }: { incomes: IncomeDTO[] }) {
       ))}
 
       <IncomeForm open={open} onClose={() => setOpen(false)} editing={editing} />
+      <ReceiveDialog
+        income={receiving?.income ?? null}
+        period={receiving?.period ?? now}
+        accounts={accounts}
+        onClose={() => setReceiving(null)}
+      />
       <datalist id="origin-suggestions">
         {ORIGIN_SUGGESTIONS.map((o) => (
           <option key={o} value={o} />
         ))}
       </datalist>
+    </div>
+  );
+}
+
+/** Cobros del mes actual y de los últimos meses, con opción de deshacer. */
+function ReceiptStatus({
+  income,
+  now,
+  onUndo,
+}: {
+  income: IncomeDTO;
+  now: Period;
+  onUndo: (receiptId: string) => void;
+}) {
+  const recent = [...income.receipts]
+    .sort((a, b) => (a.period < b.period ? 1 : -1))
+    .slice(0, 3);
+  const pendingNow =
+    appliesTo(income, now) && !income.receipts.some((r) => r.period === now);
+  if (recent.length === 0 && !pendingNow) return null;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      {pendingNow && (
+        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+          {periodShortLabel(now)}: por cobrar
+        </span>
+      )}
+      {recent.map((r) => (
+        <span
+          key={r.id}
+          className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700"
+          title={`Cobrado el ${dateLabel(r.date)}`}
+        >
+          {periodShortLabel(r.period)}: cobrado {formatMoney(r.amount, income.currency)}
+          <button
+            type="button"
+            onClick={() => onUndo(r.id)}
+            className="rounded p-0.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-800"
+            aria-label={`Deshacer el cobro de ${periodShortLabel(r.period)}`}
+            title="Deshacer: la plata sale de las cuentas y vuelve a estar por cobrar"
+          >
+            <Undo2 className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
     </div>
   );
 }
