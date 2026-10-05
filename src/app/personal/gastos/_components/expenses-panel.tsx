@@ -45,6 +45,7 @@ import { FixedForm } from "./fixed-form";
 import { BulkImport } from "./bulk-import";
 import { ReplicateDialog } from "./replicate-dialog";
 import { PayDialog, type PayAccount } from "./pay-dialog";
+import { useClearActionParam } from "@/lib/use-clear-action";
 
 export function ExpensesPanel({
   period,
@@ -53,6 +54,7 @@ export function ExpensesPanel({
   fixedTemplates,
   budgets,
   accounts,
+  initialAction,
 }: {
   period: Period;
   expenses: ExpenseDTO[];
@@ -61,8 +63,11 @@ export function ExpensesPanel({
   budgets: BudgetDTO[];
   /** Cuentas de ahorro activas, para elegir de dónde sale un pago. */
   accounts: PayAccount[];
+  /** Acceso directo: abre "Agregar gasto" o "Pagar" al entrar. */
+  initialAction?: "cargar" | "pagar";
 }) {
-  const [formOpen, setFormOpen] = useState(false);
+  useClearActionParam(initialAction);
+  const [formOpen, setFormOpen] = useState(initialAction === "cargar");
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
   const [fixedEditing, setFixedEditing] = useState<FixedExpenseDTO | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -72,7 +77,13 @@ export function ExpensesPanel({
   const [paying, setPaying] = useState<{
     title: string;
     items: ExpenseDTO[];
-  } | null>(null);
+  } | null>(() => {
+    if (initialAction !== "pagar") return null;
+    const unpaid = expenses.filter((e) => !e.paid);
+    return unpaid.length > 0
+      ? { title: `Pagar gastos de ${periodLabel(period).toLowerCase()}`, items: unpaid }
+      : null;
+  });
 
   const openNew = () => {
     setEditing(null);

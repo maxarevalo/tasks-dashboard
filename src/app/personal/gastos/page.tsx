@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 export default async function GastosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; accion?: string }>;
 }) {
-  const { mes } = await searchParams;
+  const { mes, accion } = await searchParams;
   const period = normalizePeriod(mes);
   const [data, savings] = await Promise.all([
     getMonthData(period),
@@ -102,6 +102,9 @@ export default async function GastosPage({
         fixedTemplates={data.fixedTemplates}
         budgets={data.budgets}
         accounts={accounts}
+        initialAction={
+          accion === "cargar" || accion === "pagar" ? accion : undefined
+        }
       />
     </div>
   );
