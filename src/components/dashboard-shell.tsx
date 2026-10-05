@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Menu, X, LogOut, ArrowLeftRight } from "lucide-react";
+import { Menu, X, LogOut, ArrowLeftRight, Loader2 } from "lucide-react";
 import type { Section } from "@/lib/nav";
 import { iconMap } from "@/lib/icons";
 import { ProfileSwitcher } from "@/components/profile-switcher";
+import {
+  NavigationProvider,
+  ProgressBar,
+  useNavigate,
+} from "@/components/navigation-progress";
 import type { ProfileDTO } from "@/lib/profile";
 
 type SessionUser = {
@@ -17,20 +22,44 @@ type SessionUser = {
   image?: string | null;
 };
 
-export function DashboardShell({
-  section,
-  user,
-  profiles,
-  activeProfileKey,
-  children,
-}: {
+/** Spinner del link del menú mientras su página carga (siempre presente para no mover el layout). */
+function PendingSpinner() {
+  const { pending } = useLinkStatus();
+  return (
+    <Loader2
+      aria-hidden
+      className={`h-3.5 w-3.5 shrink-0 animate-spin transition-opacity ${
+        pending ? "opacity-70" : "opacity-0"
+      }`}
+    />
+  );
+}
+
+export function DashboardShell(props: ShellProps) {
+  return (
+    <NavigationProvider>
+      <Shell {...props} />
+    </NavigationProvider>
+  );
+}
+
+type ShellProps = {
   section: Section;
   user: SessionUser;
   profiles: ProfileDTO[];
   activeProfileKey: string;
   children: React.ReactNode;
-}) {
+};
+
+function Shell({
+  section,
+  user,
+  profiles,
+  activeProfileKey,
+  children,
+}: ShellProps) {
   const [open, setOpen] = useState(false);
+  const { pending } = useNavigate();
   const pathname = usePathname();
 
   const isActive = (href: string) =>
@@ -53,6 +82,7 @@ export function DashboardShell({
           >
             <Icon className="h-4 w-4 shrink-0" />
             <span className="flex-1">{item.label}</span>
+            <PendingSpinner />
             {item.soon && (
               <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
                 Pronto
@@ -166,10 +196,18 @@ export function DashboardShell({
               <LogOut className="h-4 w-4" />
             </button>
           </div>
+          <ProgressBar active={pending} />
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto w-full max-w-5xl">{children}</div>
+          <div
+            aria-busy={pending}
+            className={`mx-auto w-full max-w-5xl transition-opacity ${
+              pending ? "opacity-60" : ""
+            }`}
+          >
+            {children}
+          </div>
         </main>
       </div>
 

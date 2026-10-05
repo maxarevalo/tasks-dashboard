@@ -1,17 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@/components/navigation-progress";
 import { HORIZONS } from "./horizons";
 
 export function HorizonSelector({ value }: { value: number }) {
-  const router = useRouter();
+  const { push } = useNavigate();
   return (
     <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
       {HORIZONS.map((n) => (
         <button
           key={n}
           type="button"
-          onClick={() => router.push(`/personal/estado-contable/detalle?h=${n}`)}
+          onClick={() => push(`/personal/estado-contable/detalle?h=${n}`)}
           className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
             value === n
               ? "bg-slate-900 text-white"

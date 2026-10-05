@@ -8,3 +8,22 @@
 html {
   -webkit-text-size-adjust: 100%;
 }
+
+/* Barra de progreso de navegación (components/navigation-progress.tsx). */
+@keyframes nav-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.nav-progress {
+  animation: nav-progress 1.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress {
+    animation: none;
+    width: 100%;
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@/components/navigation-progress";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { addMonths, currentPeriod, periodLabel, type Period } from "@/lib/period";
 
@@ -11,8 +11,8 @@ export function MonthNav({
   period: Period;
   basePath?: string;
 }) {
-  const router = useRouter();
-  const go = (p: Period) => router.push(`${basePath}?mes=${p}`);
+  const { push } = useNavigate();
+  const go = (p: Period) => push(`${basePath}?mes=${p}`);
   const isCurrent = period === currentPeriod();
 
   return (

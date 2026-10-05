@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@/components/navigation-progress";
 import {
   ChevronLeft,
   ChevronRight,
@@ -31,7 +31,7 @@ export function MatrixNav({
   /** Moneda a mostrar cuando `mode === "unificado"`. */
   displayCurrency: Currency;
 }) {
-  const router = useRouter();
+  const { push } = useNavigate();
   const last = periods[periods.length - 1];
 
   const go = (
@@ -41,7 +41,7 @@ export function MatrixNav({
   ) => {
     const params = new URLSearchParams({ desde: nextFrom, moneda: nextMode });
     if (nextMode === "unificado") params.set("en", nextDisplay);
-    router.push(`/personal/gastos/tabla?${params.toString()}`);
+    push(`/personal/gastos/tabla?${params.toString()}`);
   };
 
   const atCurrent = last === currentPeriod();
