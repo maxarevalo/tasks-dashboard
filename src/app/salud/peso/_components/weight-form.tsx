@@ -12,6 +12,7 @@ export function WeightForm({ lastWeight }: { lastWeight: number | null }) {
   const { pending, error, exec } = useAction();
   const [takenAt, setTakenAt] = useState("");
   const [weight, setWeight] = useState("");
+  const [note, setNote] = useState("");
 
   // La hora actual se toma en el navegador (no en el servidor) para que sea la local.
   useEffect(() => {
@@ -21,9 +22,10 @@ export function WeightForm({ lastWeight }: { lastWeight: number | null }) {
   function submit(e: React.FormEvent) {
     e.preventDefault();
     exec(
-      () => createWeightEntry({ takenAt, weight: Number(weight) }),
+      () => createWeightEntry({ takenAt, weight: Number(weight), note }),
       () => {
         setWeight("");
+        setNote("");
         setTakenAt(nowLocal());
       },
     );
@@ -74,6 +76,16 @@ export function WeightForm({ lastWeight }: { lastWeight: number | null }) {
           <Plus className="h-4 w-4" />
           {pending ? "Guardando…" : "Guardar"}
         </Button>
+      </div>
+      <div className="mt-3">
+        <Field label="Comentario (opcional)">
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={280}
+            placeholder="Ej: después de un finde largo, en ayunas…"
+          />
+        </Field>
       </div>
       {error && (
         <div className="mt-3">

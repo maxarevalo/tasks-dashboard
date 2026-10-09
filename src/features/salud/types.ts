@@ -12,6 +12,8 @@ export type WeightEntryDTO = {
   takenAt: DateTimeStr;
   /** kg */
   weight: number;
+  /** Comentario libre ("" si no tiene). */
+  note: string;
   /** Calculado: diferencia contra la medición anterior (null si es la primera). */
   delta: number | null;
 };
@@ -32,9 +34,18 @@ export type WeightWeek = {
   gapWeeks: number | null;
 };
 
+/** Hito con fecha que se marca en el gráfico. */
+export type WeightMilestoneDTO = {
+  id: string;
+  date: DateStr;
+  label: string;
+};
+
 export type WeightOverview = {
   /** Ordenadas de la más reciente a la más antigua. */
   entries: WeightEntryDTO[];
   /** Ordenadas de la más antigua a la más reciente. */
   weeks: WeightWeek[];
+  /** Ordenados del más antiguo al más reciente. */
+  milestones: WeightMilestoneDTO[];
 };

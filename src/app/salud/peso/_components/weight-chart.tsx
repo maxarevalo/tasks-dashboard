@@ -8,7 +8,11 @@ import {
   shortDay,
   weekRangeLabel,
 } from "@/features/salud/format";
-import type { WeightEntryDTO, WeightWeek } from "@/features/salud/types";
+import type {
+  WeightEntryDTO,
+  WeightMilestoneDTO,
+  WeightWeek,
+} from "@/features/salud/types";
 
 const PAD = { top: 16, right: 20, bottom: 26, left: 44 };
 const LINE_H = 240;
@@ -18,6 +22,12 @@ const BARS_H = 120;
 const LINE = "#0d9488";
 const UP = "#d97706";
 const DOWN = "#0d9488";
+/** Hitos: violeta, distinto de la serie y de subió/bajó. */
+const MARK = "#7c3aed";
+/** Alto extra arriba del gráfico para los nombres de los hitos (dos filas). */
+const MARK_ROWS_H = 30;
+/** Largo máximo del nombre de un hito dentro del gráfico (completo en el tooltip). */
+const MARK_MAX_CHARS = 22;
 
 const RANGES = [
   { weeks: 12, label: "12 sem" },
@@ -36,9 +46,11 @@ function niceStep(span: number): number {
 export function WeightChart({
   weeks: allWeeks,
   entries: allEntries,
+  milestones: allMilestones,
 }: {
   weeks: WeightWeek[];
   entries: WeightEntryDTO[];
+  milestones: WeightMilestoneDTO[];
 }) {
   const [range, setRange] = useState<number>(12);
   const [hover, setHover] = useState<number | null>(null);
@@ -81,6 +93,30 @@ export function WeightChart({
     return xDay(daysBetween(domainStart, e.takenAt.slice(0, 10)) + (h * 60 + m) / 1440);
   };
 
+  // Hitos dentro del rango visible.
+  const marks = allMilestones.filter(
+    (m) => m.date >= domainStart && m.date <= lastWeek.end,
+  );
+  const topPad = PAD.top + (marks.length > 0 ? MARK_ROWS_H : 0);
+  const chartH = LINE_H + (marks.length > 0 ? MARK_ROWS_H : 0);
+  const xMark = (m: WeightMilestoneDTO) =>
+    xDay(daysBetween(domainStart, m.date) + 0.5);
+  // Nombres en dos filas alternadas para que no se pisen (ancho estimado por carácter).
+  const rowEnds = [-Infinity, -Infinity];
+  const markLabels = marks.map((m) => {
+    const text =
+      m.label.length > MARK_MAX_CHARS
+        ? `${m.label.slice(0, MARK_MAX_CHARS - 1)}…`
+        : m.label;
+    const width = text.length * 5.6 + 10;
+    const x = xMark(m);
+    const anchorEnd = x + width > W - PAD.right;
+    const left = anchorEnd ? x - width : x;
+    const row = left > rowEnds[0] + 6 ? 0 : left > rowEnds[1] + 6 ? 1 : null;
+    if (row != null) rowEnds[row] = left + width;
+    return { m, x, text, anchorEnd, row };
+  });
+
   // Eje Y del promedio (incluye las mediciones sueltas para que no queden afuera).
   const values = [...weeks.map((w) => w.avg), ...entries.map((e) => e.weight)];
   const rawMin = Math.min(...values);
@@ -89,7 +125,7 @@ export function WeightChart({
   const yMin = Math.floor((rawMin - step * 0.3) / step) * step;
   const yMax = Math.ceil((rawMax + step * 0.3) / step) * step;
   const lineH = LINE_H - PAD.top - PAD.bottom;
-  const y = (v: number) => PAD.top + lineH - ((v - yMin) / (yMax - yMin)) * lineH;
+  const y = (v: number) => topPad + lineH - ((v - yMin) / (yMax - yMin)) * lineH;
   const yTicks: number[] = [];
   for (let v = yMin; v <= yMax + 1e-9; v += step) yTicks.push(v);
 
@@ -134,6 +170,17 @@ export function WeightChart({
   }
 
   const hw = hover != null ? weeks[hover] : null;
+  const hwMarks = hw
+    ? marks.filter((m) => m.date >= hw.start && m.date <= hw.end)
+    : [];
+  const hwNotes = hw
+    ? entries
+        .filter((e) => {
+          const d = e.takenAt.slice(0, 10);
+          return e.note && d >= hw.start && d <= hw.end;
+        })
+        .reverse()
+    : [];
   const last = weeks[weeks.length - 1];
 
   return (
@@ -145,7 +192,8 @@ export function WeightChart({
           </h3>
           <p className="text-xs text-slate-400">
             Promedio de cada semana (lunes a domingo); los puntos claros son
-            las mediciones sueltas.
+            las mediciones sueltas
+            {marks.length > 0 && "; las líneas violetas son tus hitos"}.
           </p>
         </div>
         <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
@@ -178,9 +226,9 @@ export function WeightChart({
         onTouchMove={onMove}
       >
         <svg
-          viewBox={`0 0 ${W} ${LINE_H}`}
+          viewBox={`0 0 ${W} ${chartH}`}
           className="w-full"
-          style={{ aspectRatio: `${W} / ${LINE_H}` }}
+          style={{ aspectRatio: `${W} / ${chartH}` }}
           role="img"
           aria-label="Promedio semanal de peso"
         >
@@ -210,7 +258,7 @@ export function WeightChart({
             <text
               key={w.start}
               x={xWeek(w)}
-              y={LINE_H - 8}
+              y={chartH - 8}
               textAnchor="middle"
               className="fill-slate-400"
               fontSize={10}
@@ -223,12 +271,45 @@ export function WeightChart({
             <line
               x1={xWeek(hw)}
               x2={xWeek(hw)}
-              y1={PAD.top}
-              y2={PAD.top + lineH}
+              y1={topPad}
+              y2={topPad + lineH}
               stroke="#94a3b8"
               strokeWidth={1}
             />
           )}
+
+          {/* Hitos: línea punteada + nombre arriba */}
+          {markLabels.map(({ m, x, text, anchorEnd, row }) => {
+            const labelY = PAD.top + (row ?? 0) * 14 + 4;
+            return (
+              <g key={m.id}>
+                <title>{`${m.label} · ${shortDay(m.date)}`}</title>
+                <line
+                  x1={x}
+                  x2={x}
+                  y1={row == null ? topPad - 4 : labelY + 4}
+                  y2={topPad + lineH}
+                  stroke={MARK}
+                  strokeWidth={1.25}
+                  strokeDasharray="3 3"
+                  strokeOpacity={0.7}
+                />
+                <circle cx={x} cy={row == null ? topPad - 4 : labelY + 4} r={3} fill={MARK} />
+                {row != null && (
+                  <text
+                    x={anchorEnd ? x - 6 : x + 6}
+                    y={labelY + 7}
+                    textAnchor={anchorEnd ? "end" : "start"}
+                    fill={MARK}
+                    fontSize={10}
+                    fontWeight={600}
+                  >
+                    {text}
+                  </text>
+                )}
+              </g>
+            );
+          })}
 
           {/* Mediciones sueltas, tenues */}
           {entries.map((e) => (
@@ -380,6 +461,17 @@ export function WeightChart({
               {hw.count > 1 &&
                 ` · ${formatKg(hw.min, false)}–${formatKg(hw.max)}`}
             </p>
+            {hwMarks.map((m) => (
+              <p key={m.id} className="mt-1 font-medium" style={{ color: MARK }}>
+                ⚑ {m.label} · {shortDay(m.date)}
+              </p>
+            ))}
+            {hwNotes.map((e) => (
+              <p key={e.id} className="mt-1 max-w-56 text-slate-600">
+                <span className="text-slate-400">{shortDay(e.takenAt.slice(0, 10))}:</span>{" "}
+                {e.note}
+              </p>
+            ))}
           </div>
         )}
       </div>
