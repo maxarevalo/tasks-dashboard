@@ -66,8 +66,15 @@ function WeightRow({
   const { pending, exec } = useAction();
   return (
     <li className="flex items-center gap-3 px-4 py-2.5">
-      <span className="min-w-0 flex-1 text-sm text-slate-600">
-        {dateTimeLabel(e.takenAt, withYear)}
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm text-slate-600">
+          {dateTimeLabel(e.takenAt, withYear)}
+        </span>
+        {e.note && (
+          <span className="mt-0.5 block break-words text-xs text-slate-500">
+            {e.note}
+          </span>
+        )}
       </span>
       <span className="shrink-0 text-right">
         <span className="block text-sm font-semibold tabular-nums text-slate-900">
@@ -112,6 +119,7 @@ function EditWeightModal({
   const { pending, error, exec, setError } = useAction();
   const [takenAt, setTakenAt] = useState("");
   const [weight, setWeight] = useState("");
+  const [note, setNote] = useState("");
 
   const [syncedFor, setSyncedFor] = useState<string | null>(null);
   if (entry && syncedFor !== entry.id) {
@@ -119,6 +127,7 @@ function EditWeightModal({
     setError(null);
     setTakenAt(entry.takenAt);
     setWeight(String(entry.weight));
+    setNote(entry.note);
   } else if (!entry && syncedFor !== null) {
     setSyncedFor(null);
   }
@@ -127,7 +136,7 @@ function EditWeightModal({
     ev.preventDefault();
     if (!entry) return;
     exec(
-      () => updateWeightEntry(entry.id, { takenAt, weight: Number(weight) }),
+      () => updateWeightEntry(entry.id, { takenAt, weight: Number(weight), note }),
       onClose,
     );
   }
@@ -154,6 +163,13 @@ function EditWeightModal({
             onChange={(e) => setWeight(e.target.value)}
             required
             autoFocus
+          />
+        </Field>
+        <Field label="Comentario (opcional)">
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={280}
           />
         </Field>
         <ErrorText>{error}</ErrorText>

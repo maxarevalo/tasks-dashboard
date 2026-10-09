@@ -5,6 +5,7 @@ import { WeightForm } from "./_components/weight-form";
 import { WeightStats } from "./_components/weight-stats";
 import { WeightChart } from "./_components/weight-chart";
 import { WeightHistory } from "./_components/weight-history";
+import { WeightMilestones } from "./_components/weight-milestones";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,12 @@ export default async function PesoPage() {
       />
       <WeightForm lastWeight={overview.entries[0]?.weight ?? null} />
       <WeightStats overview={overview} />
-      <WeightChart weeks={overview.weeks} entries={overview.entries} />
+      <WeightChart
+        weeks={overview.weeks}
+        entries={overview.entries}
+        milestones={overview.milestones}
+      />
+      <WeightMilestones milestones={overview.milestones} />
       <WeightHistory entries={overview.entries} />
     </div>
   );

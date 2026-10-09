@@ -57,3 +57,15 @@ export function nowLocal(): DateTimeStr {
     d.getHours(),
   )}:${pad(d.getMinutes())}`;
 }
+
+/** "4 oct 2026" */
+export function dayLabel(date: DateStr): string {
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+    .format(toDate(date))
+    .replaceAll(".", "")
+    .replace(/ de /g, " ");
+}

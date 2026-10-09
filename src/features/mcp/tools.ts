@@ -37,7 +37,11 @@ import {
 import { getPfOverview } from "@/features/pf-dardo/queries";
 import { getAutoOverview } from "@/features/auto/queries";
 import { getWeightOverview } from "@/features/salud/queries";
-import { createWeightEntry, updateWeightEntry } from "@/features/salud/actions";
+import {
+  createWeightEntry,
+  updateWeightEntry,
+  createWeightMilestone,
+} from "@/features/salud/actions";
 import {
   createFuelLog,
   createServiceRecord,
@@ -416,7 +420,7 @@ export function registerDashboardTools(server: McpServer) {
     {
       title: "Peso",
       description:
-        "Últimas mediciones de peso (con id, para corregirlas) y promedios semanales (lunes a domingo) con su variación contra la semana anterior.",
+        "Últimas mediciones de peso (con id y comentario, para corregirlas), promedios semanales (lunes a domingo) con su variación contra la semana anterior, e hitos con fecha (ej. inicio de gym, viaje).",
       inputSchema: z.object({ semanas: z.number().int().min(1).max(104).default(12) }),
       annotations: READ,
     },
@@ -425,6 +429,7 @@ export function registerDashboardTools(server: McpServer) {
       return text({
         ultimas_mediciones: o.entries.slice(0, 20),
         semanas: o.weeks.slice(-(semanas ?? 12)),
+        hitos: o.milestones,
       });
     }),
   );
@@ -1034,19 +1039,25 @@ export function registerDashboardTools(server: McpServer) {
     "registrar_peso",
     {
       title: "Registrar peso",
-      description: "Registra una medición de peso en kg; por defecto con la fecha y hora actuales.",
+      description:
+        "Registra una medición de peso en kg; por defecto con la fecha y hora actuales. Opcionalmente con un comentario.",
       inputSchema: z.object({
         kg: z.number().min(20).max(400),
         fecha_hora: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Formato YYYY-MM-DDTHH:mm")
           .optional(),
+        comentario: z.string().max(280).optional(),
       }),
       annotations: WRITE,
     },
-    scoped(async (a: { kg: number; fecha_hora?: string }) =>
+    scoped(async (a: { kg: number; fecha_hora?: string; comentario?: string }) =>
       act(
-        createWeightEntry({ takenAt: a.fecha_hora ?? today().dateTime, weight: a.kg }),
+        createWeightEntry({
+          takenAt: a.fecha_hora ?? today().dateTime,
+          weight: a.kg,
+          note: a.comentario,
+        }),
         `Peso de ${a.kg} kg registrado.`,
       ),
     ),
@@ -1056,7 +1067,8 @@ export function registerDashboardTools(server: McpServer) {
     "editar_peso",
     {
       title: "Corregir una medición de peso",
-      description: "Cambia el peso o la fecha y hora de una medición (id de la herramienta peso).",
+      description:
+        "Cambia el peso, la fecha y hora o el comentario de una medición (id de la herramienta peso).",
       inputSchema: z.object({
         id,
         kg: z.number().min(20).max(400).optional(),
@@ -1064,19 +1076,44 @@ export function registerDashboardTools(server: McpServer) {
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Formato YYYY-MM-DDTHH:mm")
           .optional(),
+        comentario: z.string().max(280).optional(),
       }),
       annotations: WRITE,
     },
-    scoped(async (a: { id: string; kg?: number; fecha_hora?: string }) => {
+    scoped(async (a: { id: string; kg?: number; fecha_hora?: string; comentario?: string }) => {
       const cur = (await getWeightOverview()).entries.find((e) => e.id === a.id);
       if (!cur) return fail("No encontré esa medición (ver la herramienta peso).");
       return act(
         updateWeightEntry(a.id, {
           takenAt: a.fecha_hora ?? cur.takenAt,
           weight: a.kg ?? cur.weight,
+          note: a.comentario ?? cur.note,
         }),
         "Medición actualizada.",
       );
     }),
+  );
+
+  server.registerTool(
+    "registrar_hito_peso",
+    {
+      title: "Registrar un hito de peso",
+      description:
+        "Agrega un hito con fecha que se marca en el gráfico de peso (ej. \"Inicio de gym\", \"Viaje\", \"Comienzo de dieta\"). Cualquier texto de hasta 60 caracteres; por defecto con la fecha de hoy.",
+      inputSchema: z.object({
+        hito: z.string().min(1).max(60),
+        fecha: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD")
+          .optional(),
+      }),
+      annotations: WRITE,
+    },
+    scoped(async (a: { hito: string; fecha?: string }) =>
+      act(
+        createWeightMilestone({ date: a.fecha ?? today().date, label: a.hito }),
+        `Hito "${a.hito}" registrado.`,
+      ),
+    ),
   );
 }

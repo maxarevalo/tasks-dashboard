@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/request-context";
 import { connectToDatabase } from "@/lib/db";
 import { getActiveProfileKey } from "@/lib/profile";
-import { WeightEntry } from "@/models/salud";
+import { WeightEntry, WeightMilestone } from "@/models/salud";
 import type { ActionResult } from "./types";
 
 const PATH = "/salud";
@@ -35,6 +35,11 @@ const weightInput = z.object({
     .number()
     .min(20, "El peso debe ser de al menos 20 kg.")
     .max(400, "El peso no puede superar los 400 kg."),
+  note: z
+    .string()
+    .trim()
+    .max(280, "El comentario puede tener hasta 280 caracteres.")
+    .optional(),
 });
 
 export async function createWeightEntry(
@@ -59,5 +64,41 @@ export async function updateWeightEntry(
 export async function deleteWeightEntry(id: string): Promise<ActionResult> {
   return run(async (uid) => {
     await WeightEntry.deleteOne({ _id: id, userId: uid });
+  });
+}
+
+/* --------------------------------- Hitos --------------------------------- */
+
+const milestoneInput = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida."),
+  label: z
+    .string()
+    .trim()
+    .min(1, "Escribí el hito.")
+    .max(60, "El hito puede tener hasta 60 caracteres."),
+});
+
+export async function createWeightMilestone(
+  input: z.input<typeof milestoneInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = milestoneInput.parse(input);
+    await WeightMilestone.create({ userId: uid, ...data });
+  });
+}
+
+export async function updateWeightMilestone(
+  id: string,
+  input: z.input<typeof milestoneInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = milestoneInput.parse(input);
+    await WeightMilestone.updateOne({ _id: id, userId: uid }, { $set: data });
+  });
+}
+
+export async function deleteWeightMilestone(id: string): Promise<ActionResult> {
+  return run(async (uid) => {
+    await WeightMilestone.deleteOne({ _id: id, userId: uid });
   });
 }
