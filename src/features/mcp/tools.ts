@@ -20,6 +20,7 @@ import {
   setTagBudget,
 } from "@/features/gastos/actions";
 import {
+  getAccountChanges,
   getAccountMovements,
   getContableOverview,
   getExchangeRate,
@@ -30,6 +31,8 @@ import {
 } from "@/features/contable/queries";
 import {
   createIncome,
+  createSavingsAccount,
+  updateSavingsAccount,
   receiveIncome,
   reconcileAccounts,
   transferBetweenAccounts,
@@ -780,6 +783,160 @@ export function registerDashboardTools(server: McpServer) {
           "Transferencia registrada.",
         ),
     ),
+  );
+
+  /* ------------------------- Cuentas de ahorro -------------------------- */
+
+  const RETURN_MODE_IN = { sin: "none", tna: "tna", tea: "tea", mensual: "monthly" } as const;
+  const rendimiento = z
+    .object({
+      modo: z
+        .enum(["sin", "tna", "tea", "mensual"])
+        .describe("sin = no rinde; tna/tea = tasa anual; mensual = tasa mensual directa"),
+      tasa: z.number().min(0).max(100000).default(0).describe("Porcentaje, ej. 35 para 35%"),
+    })
+    .describe("Rendimiento de la cuenta");
+  type Rendimiento = { modo: keyof typeof RETURN_MODE_IN; tasa?: number };
+  const toReturn = (r: Rendimiento) => {
+    const mode = RETURN_MODE_IN[r.modo];
+    return {
+      mode,
+      annualRatePct: mode === "tna" || mode === "tea" ? (r.tasa ?? 0) : 0,
+      monthlyRatePct: mode === "monthly" ? (r.tasa ?? 0) : 0,
+    };
+  };
+  const disponibilidad = z.enum(["inmediata", "corto", "inmovilizada"]);
+
+  server.registerTool(
+    "crear_cuenta_ahorro",
+    {
+      title: "Crear una cuenta de ahorro",
+      description:
+        "Da de alta una cuenta de ahorro (ej. cuenta remunerada, FCI, caja en USD) con su saldo actual, rendimiento y vencimiento opcional. Queda registrada en su historial de cambios.",
+      inputSchema: z.object({
+        nombre: z.string().min(1).max(80),
+        moneda: currency,
+        saldo: z.number().default(0),
+        categoria: z.string().max(60).optional(),
+        disponibilidad: disponibilidad.default("inmediata"),
+        rendimiento: rendimiento.optional(),
+        vencimiento: date.optional().describe("YYYY-MM-DD, solo si la cuenta rinde"),
+        recibe_excedente: z
+          .boolean()
+          .optional()
+          .describe("Si el excedente del mes (ingresos − gastos) cae en esta cuenta; una por moneda"),
+      }),
+      annotations: WRITE,
+    },
+    scoped(
+      async (a: {
+        nombre: string;
+        moneda: "ARS" | "USD";
+        saldo?: number;
+        categoria?: string;
+        disponibilidad?: "inmediata" | "corto" | "inmovilizada";
+        rendimiento?: Rendimiento;
+        vencimiento?: string;
+        recibe_excedente?: boolean;
+      }) => {
+        const ret = toReturn(a.rendimiento ?? { modo: "sin" });
+        const res = await createSavingsAccount({
+          name: a.nombre,
+          category: a.categoria ?? "",
+          availability: a.disponibilidad ?? "inmediata",
+          currency: a.moneda,
+          balance: a.saldo ?? 0,
+          balanceAsOf: today().period,
+          receivesNet: a.recibe_excedente ?? false,
+          return: ret,
+          maturityDate: ret.mode === "none" ? "" : (a.vencimiento ?? ""),
+        });
+        if (!res.ok) return fail(res.error);
+        const created = (await getSavingsAccounts(false))
+          .filter((x) => x.name === a.nombre.trim() && x.currency === a.moneda)
+          .pop();
+        return text({ ok: true, mensaje: `Cuenta "${a.nombre}" creada.`, id: created?.id ?? null });
+      },
+    ),
+  );
+
+  server.registerTool(
+    "editar_cuenta_ahorro",
+    {
+      title: "Editar una cuenta de ahorro",
+      description:
+        "Cambia datos de una cuenta (id de cuentas_ahorro): nombre, categoría, disponibilidad, rendimiento/tasa, vencimiento o saldo. Solo se tocan los campos enviados. Cada cambio queda en el historial de la cuenta; un cambio de saldo queda además como movimiento de ajuste (para plata que entra o sale preferí cobrar_ingreso, pagar_gastos o transferir). Mandá vencimiento \"\" para quitarlo.",
+      inputSchema: z.object({
+        id,
+        nombre: z.string().min(1).max(80).optional(),
+        categoria: z.string().max(60).optional(),
+        disponibilidad: disponibilidad.optional(),
+        rendimiento: rendimiento.optional(),
+        vencimiento: z.union([z.literal(""), date]).optional(),
+        saldo: z.number().optional(),
+        recibe_excedente: z.boolean().optional(),
+      }),
+      annotations: WRITE,
+    },
+    scoped(
+      async (a: {
+        id: string;
+        nombre?: string;
+        categoria?: string;
+        disponibilidad?: "inmediata" | "corto" | "inmovilizada";
+        rendimiento?: Rendimiento;
+        vencimiento?: string;
+        saldo?: number;
+        recibe_excedente?: boolean;
+      }) => {
+        const cur = (await getSavingsAccounts(true)).find((x) => x.id === a.id);
+        if (!cur) return fail("No encontré esa cuenta (ver cuentas_ahorro).");
+        const ret = a.rendimiento ? toReturn(a.rendimiento) : cur.return;
+        const maturity = a.vencimiento ?? cur.maturityDate;
+        return act(
+          updateSavingsAccount(cur.id, {
+            name: a.nombre ?? cur.name,
+            category: a.categoria ?? cur.category,
+            availability: a.disponibilidad ?? cur.availability,
+            currency: cur.currency,
+            balance: a.saldo ?? cur.balance,
+            balanceAsOf: a.saldo != null ? today().period : cur.balanceAsOf || today().period,
+            receivesNet: a.recibe_excedente ?? cur.receivesNet,
+            return: ret,
+            manualProjections: ret.mode === "manual" ? cur.manualProjections : [],
+            maturityDate: ret.mode === "none" ? "" : maturity,
+          }),
+          `Cuenta "${a.nombre ?? cur.name}" actualizada.`,
+        );
+      },
+    ),
+  );
+
+  server.registerTool(
+    "historial_cuenta_ahorro",
+    {
+      title: "Historial de una cuenta de ahorro",
+      description:
+        "Cambios de configuración de una cuenta (alta, tasas, vencimientos, nombre…) y sus últimos movimientos de plata (pagos, cobros, ajustes, transferencias).",
+      inputSchema: z.object({ id, limite: z.number().int().min(1).max(100).default(20) }),
+      annotations: READ,
+    },
+    scoped(async (a: { id: string; limite?: number }) => {
+      const limit = a.limite ?? 20;
+      const [changes, movements] = await Promise.all([
+        getAccountChanges(limit, a.id),
+        getAccountMovements(limit),
+      ]);
+      return text({
+        cambios: (changes[a.id] ?? []).map((c) => ({
+          fecha: c.at,
+          tipo: c.kind,
+          origen: c.source,
+          cambios: c.changes.map((ch) => ({ campo: ch.label, antes: ch.from, despues: ch.to })),
+        })),
+        movimientos: movements[a.id] ?? [],
+      });
+    }),
   );
 
   server.registerTool(

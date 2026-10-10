@@ -81,6 +81,16 @@ export type AccountMovementDTO = {
   transferId: string | null;
 };
 
+export type AccountChangeDTO = {
+  id: string;
+  accountId: string;
+  /** ISO del momento del cambio. */
+  at: string;
+  kind: "alta" | "edicion";
+  source: "app" | "mcp";
+  changes: { field: string; label: string; from: string; to: string }[];
+};
+
 export type ReconciliationDTO = {
   id: string;
   period: Period;

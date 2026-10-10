@@ -12,6 +12,7 @@ import {
   ArrowLeftRight,
   Undo2,
   ClipboardCheck,
+  History,
 } from "lucide-react";
 import Link from "next/link";
 import { TransferDialog } from "./transfer-dialog";
@@ -31,6 +32,7 @@ import {
 import {
   AVAILABILITY_LABELS,
   type AccountMovementDTO,
+  type AccountChangeDTO,
   type SavingsAccountDTO,
   type ReturnMode,
 } from "@/features/contable/types";
@@ -51,10 +53,13 @@ const RETURN_MODES: ReturnMode[] = ["none", "tna", "tea", "monthly", "manual"];
 export function SavingsManager({
   accounts,
   movements,
+  changes,
 }: {
   accounts: SavingsAccountDTO[];
   /** Últimos movimientos por id de cuenta. */
   movements: Record<string, AccountMovementDTO[]>;
+  /** Historial de cambios de configuración por id de cuenta. */
+  changes: Record<string, AccountChangeDTO[]>;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SavingsAccountDTO | null>(null);
@@ -181,6 +186,7 @@ export function SavingsManager({
                   currency={a.currency}
                   movements={movements[a.id] ?? []}
                 />
+                <AccountChanges changes={changes[a.id] ?? []} />
               </li>
             ))}
           </ul>
@@ -266,6 +272,74 @@ function AccountMovements({
                   <Undo2 className="h-3.5 w-3.5" />
                 </button>
               )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** "9 oct 2026, 14:05" en la hora local del navegador. */
+function changeDate(iso: string): string {
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+    .format(new Date(iso))
+    .replaceAll(".", "");
+}
+
+/** Historial plegable de cambios de la cuenta: alta, tasa, vencimiento, nombre… */
+function AccountChanges({ changes }: { changes: AccountChangeDTO[] }) {
+  const [open, setOpen] = useState(false);
+  if (changes.length === 0) return null;
+  return (
+    <div className="border-t border-slate-100">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900"
+        aria-expanded={open}
+      >
+        <History className="h-3.5 w-3.5" />
+        Historial de cambios ({changes.length}
+        {changes.length >= 20 ? "+" : ""})
+      </button>
+      {open && (
+        <ul className="divide-y divide-slate-100 border-t border-slate-100">
+          {changes.map((c) => (
+            <li key={c.id} className="px-4 py-2 text-sm">
+              <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                <span suppressHydrationWarning>{changeDate(c.at)}</span>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase">
+                  {c.kind === "alta" ? "Alta" : "Edición"}
+                </span>
+                {c.source === "mcp" && (
+                  <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
+                    Asistente IA
+                  </span>
+                )}
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {c.changes.map((ch) => (
+                  <li key={ch.field} className="text-slate-700">
+                    <span className="text-slate-500">{ch.label}:</span>{" "}
+                    {c.kind === "edicion" && (
+                      <>
+                        <span className="text-slate-400 line-through">
+                          {ch.from || "—"}
+                        </span>{" "}
+                        →{" "}
+                      </>
+                    )}
+                    <span className="font-medium">{ch.to || "—"}</span>
+                  </li>
+                ))}
+              </ul>
             </li>
           ))}
         </ul>

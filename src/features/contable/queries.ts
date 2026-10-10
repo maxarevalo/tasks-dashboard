@@ -7,6 +7,7 @@ import {
   IncomeReceipt,
   AccountMovement,
   Reconciliation,
+  AccountChange,
 } from "@/models/contable";
 import { getActiveProfileKey } from "@/lib/profile";
 import {
@@ -31,6 +32,7 @@ import type {
   ExchangeRateDTO,
   UnifiedOverview,
   UnifiedProjection,
+  AccountChangeDTO,
 } from "./types";
 import { AVAILABILITY } from "@/models/contable";
 
@@ -379,4 +381,39 @@ export async function getUnifiedProjection(
       months: monthsOut,
     },
   };
+}
+
+/** Últimos cambios de configuración por id de cuenta (o de una sola cuenta). */
+export async function getAccountChanges(
+  perAccount = 20,
+  accountId?: string,
+): Promise<Record<string, AccountChangeDTO[]>> {
+  await connectToDatabase();
+  const uid = await getActiveProfileKey();
+  const filter: Record<string, unknown> = { userId: uid };
+  if (accountId) filter.accountId = accountId;
+  const docs = await AccountChange.find(filter)
+    .sort({ createdAt: -1 })
+    .limit(1000)
+    .lean();
+  const out: Record<string, AccountChangeDTO[]> = {};
+  for (const d of docs) {
+    const k = str(d.accountId);
+    const list = (out[k] ??= []);
+    if (list.length >= perAccount) continue;
+    list.push({
+      id: str(d._id),
+      accountId: k,
+      at: (d.createdAt as Date).toISOString(),
+      kind: d.kind as AccountChangeDTO["kind"],
+      source: (d.source as AccountChangeDTO["source"]) ?? "app",
+      changes: ((d.changes as AccountChangeDTO["changes"]) ?? []).map((c) => ({
+        field: c.field,
+        label: c.label,
+        from: c.from ?? "",
+        to: c.to ?? "",
+      })),
+    });
+  }
+  return out;
 }

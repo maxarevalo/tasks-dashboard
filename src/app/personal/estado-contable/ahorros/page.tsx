@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, PiggyBank } from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
 import {
+  getAccountChanges,
   getAccountMovements,
   getSavingsAccounts,
 } from "@/features/contable/queries";
@@ -10,9 +11,10 @@ import { SavingsManager } from "./savings-manager";
 export const dynamic = "force-dynamic";
 
 export default async function AhorrosPage() {
-  const [accounts, movements] = await Promise.all([
+  const [accounts, movements, changes] = await Promise.all([
     getSavingsAccounts(true),
     getAccountMovements(),
+    getAccountChanges(),
   ]);
 
   return (
@@ -31,7 +33,7 @@ export default async function AhorrosPage() {
         icon={PiggyBank}
       />
 
-      <SavingsManager accounts={accounts} movements={movements} />
+      <SavingsManager accounts={accounts} movements={movements} changes={changes} />
     </div>
   );
 }
