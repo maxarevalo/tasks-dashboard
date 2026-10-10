@@ -58,6 +58,7 @@ function mapAccount(doc: Lean): SavingsAccountDTO {
           (m) => ({ period: m.period, amount: m.amount }),
         )
       : [],
+    maturityDate: str(doc.maturityDate),
     archived: Boolean(doc.archived),
   };
 }

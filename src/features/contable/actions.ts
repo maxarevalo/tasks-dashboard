@@ -72,6 +72,10 @@ const accountInput = z.object({
     .max(60)
     .optional()
     .default([]),
+  /** "" lo borra; si no viene, no se toca (ej. otras pantallas que editan la cuenta). */
+  maturityDate: z
+    .union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha de vencimiento inválida.")])
+    .optional(),
 });
 
 export async function createSavingsAccount(

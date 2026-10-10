@@ -36,6 +36,8 @@ export type SavingsAccountDTO = {
     monthlyRatePct: number;
   };
   manualProjections: { period: Period; amount: number }[];
+  /** Vencimiento (YYYY-MM-DD) de una cuenta remunerada; "" si no tiene. */
+  maturityDate: string;
   archived: boolean;
 };
 
