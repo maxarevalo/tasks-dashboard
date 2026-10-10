@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/request-context";
+import { getRequestContext, requireUser } from "@/lib/request-context";
 import { connectToDatabase } from "@/lib/db";
 import { getActiveProfileKey } from "@/lib/profile";
 import {
@@ -12,10 +12,12 @@ import {
   AccountMovement,
   IncomeReceipt,
   Reconciliation,
+  AccountChange,
   DOLLAR_TYPES,
   RATE_BASIS,
 } from "@/models/contable";
 import { applyMovement, revertMovements } from "./movements";
+import { creationChanges, diffChanges } from "./account-changes";
 import { fetchDollar } from "@/lib/exchange";
 import { isValidPeriod, RECURRENCE_FREQUENCIES } from "@/lib/period";
 import { todayStr } from "@/lib/pf";
@@ -89,8 +91,20 @@ export async function createSavingsAccount(
         { $set: { receivesNet: false } },
       );
     }
-    await SavingsAccount.create({ userId: uid, ...data });
+    const created = await SavingsAccount.create({ userId: uid, ...data });
+    await AccountChange.create({
+      userId: uid,
+      accountId: created._id,
+      kind: "alta",
+      source: changeSource(),
+      changes: creationChanges(data),
+    });
   });
+}
+
+/** Desde dónde viene el cambio, para el historial. */
+function changeSource(): "app" | "mcp" {
+  return getRequestContext()?.source === "mcp" ? "mcp" : "app";
 }
 
 export async function updateSavingsAccount(
@@ -105,13 +119,23 @@ export async function updateSavingsAccount(
         { $set: { receivesNet: false } },
       );
     }
-    const before = await SavingsAccount.findOne({ _id: id, userId: uid })
-      .select("balance")
-      .lean();
+    const before = await SavingsAccount.findOne({ _id: id, userId: uid }).lean();
+    if (!before) throw new Error("No encontré esa cuenta.");
     await SavingsAccount.updateOne(
       { _id: id, userId: uid },
       { $set: data },
     );
+    // Cambios de configuración (tasa, vencimiento, nombre…) al historial.
+    const changes = diffChanges(before, { ...before, ...data });
+    if (changes.length > 0) {
+      await AccountChange.create({
+        userId: uid,
+        accountId: id,
+        kind: "edicion",
+        source: changeSource(),
+        changes,
+      });
+    }
     // Un cambio de saldo hecho a mano queda en el historial como ajuste.
     const diff = data.balance - ((before?.balance as number) ?? 0);
     if (before && Math.abs(diff) >= 0.005) {
@@ -121,7 +145,10 @@ export async function updateSavingsAccount(
         date: todayStr(),
         amount: diff,
         kind: "ajuste",
-        description: "Ajuste manual del saldo",
+        description:
+          changeSource() === "mcp"
+            ? "Ajuste del saldo (asistente IA)"
+            : "Ajuste manual del saldo",
       });
     }
   });
@@ -143,6 +170,7 @@ export async function deleteSavingsAccount(id: string): Promise<ActionResult> {
   return run(async (uid) => {
     await SavingsAccount.deleteOne({ _id: id, userId: uid });
     await AccountMovement.deleteMany({ userId: uid, accountId: id });
+    await AccountChange.deleteMany({ userId: uid, accountId: id });
   });
 }
 

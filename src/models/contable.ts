@@ -167,6 +167,41 @@ export type AccountMovementDoc = InferSchemaType<typeof accountMovementSchema>;
 export const AccountMovement =
   models.AccountMovement ?? model("AccountMovement", accountMovementSchema);
 
+/* ---------------------------- AccountChange ---------------------------- */
+
+/**
+ * Historial de cambios de configuración de una cuenta (alta, tasa,
+ * vencimiento, nombre…). Los cambios de saldo quedan como movimientos
+ * "ajuste", no acá.
+ */
+const accountChangeSchema = new Schema(
+  {
+    userId: { type: String, required: true, default: OWNER_ID, index: true },
+    accountId: { type: Schema.Types.ObjectId, ref: "SavingsAccount", required: true },
+    kind: { type: String, enum: ["alta", "edicion"], required: true },
+    /** Desde dónde se hizo: la app o un asistente por MCP. */
+    source: { type: String, enum: ["app", "mcp"], default: "app" },
+    changes: {
+      type: [
+        {
+          _id: false,
+          field: { type: String, required: true },
+          label: { type: String, required: true },
+          from: { type: String, default: "" },
+          to: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
+  },
+  { timestamps: true },
+);
+
+accountChangeSchema.index({ userId: 1, accountId: 1, createdAt: -1 });
+
+export const AccountChange =
+  models.AccountChange ?? model("AccountChange", accountChangeSchema);
+
 /* ---------------------------- IncomeReceipt ---------------------------- */
 
 /**
