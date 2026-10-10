@@ -1,9 +1,13 @@
 import Link from "next/link";
-import { ChevronRight, Plus, Check, HandCoins } from "lucide-react";
+import { ChevronRight, Plus, Check, HandCoins, CalendarClock } from "lucide-react";
 import { PageHeader } from "@/components/page-parts";
 import { sections } from "@/lib/nav";
 import { iconMap } from "@/lib/icons";
 import { SHORTCUTS } from "@/lib/shortcuts";
+import { getUpcomingMaturities } from "@/features/vencimientos/queries";
+import { MaturityRow } from "@/components/notifications-bell";
+
+export const dynamic = "force-dynamic";
 
 /** Ícono y tono de cada acceso directo: oscuro para gastos, verde para ingresos. */
 const SHORTCUT_STYLE = {
@@ -13,8 +17,9 @@ const SHORTCUT_STYLE = {
   "cobrar-ingreso": { Icon: HandCoins, tone: "bg-teal-700 text-white" },
 } as const;
 
-export default function PersonalHome() {
+export default async function PersonalHome() {
   const modules = sections.personal.nav.filter((item) => item.href !== "/personal");
+  const { items, daysBefore } = await getUpcomingMaturities();
 
   return (
     <div>
@@ -22,6 +27,26 @@ export default function PersonalHome() {
         title="Resumen personal"
         description="Accedé a tus módulos personales."
       />
+
+      {items.length > 0 && (
+        <section
+          aria-labelledby="vencimientos"
+          className="mb-8 overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm"
+        >
+          <h3
+            id="vencimientos"
+            className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900"
+          >
+            <CalendarClock className="h-4 w-4" />
+            Próximos vencimientos
+          </h3>
+          <ul className="divide-y divide-slate-100">
+            {items.map((i) => (
+              <MaturityRow key={i.key} item={i} highlight={i.daysLeft <= daysBefore} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section aria-labelledby="accesos" className="mb-8">
         <h3

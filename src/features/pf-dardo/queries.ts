@@ -24,7 +24,7 @@ function mapMovement(doc: Lean): PfMovementDTO {
   };
 }
 
-function mapPlazo(doc: Lean): PlazoFijoDTO {
+export function mapPlazo(doc: Lean): PlazoFijoDTO {
   const startDate = str(doc.startDate);
   const termDays = (doc.termDays as number) ?? 0;
   const principal = (doc.principal as number) ?? 0;

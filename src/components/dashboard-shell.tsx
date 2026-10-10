@@ -15,6 +15,8 @@ import {
   useNavigate,
 } from "@/components/navigation-progress";
 import type { ProfileDTO } from "@/lib/profile";
+import { NotificationsBell } from "@/components/notifications-bell";
+import type { MaturityItem } from "@/features/vencimientos/types";
 
 type SessionUser = {
   name?: string | null;
@@ -48,6 +50,9 @@ type ShellProps = {
   user: SessionUser;
   profiles: ProfileDTO[];
   activeProfileKey: string;
+  /** Próximos vencimientos del perfil activo (campanita). */
+  alerts: { items: MaturityItem[]; daysBefore: number };
+  vapidKey: string | null;
   children: React.ReactNode;
 };
 
@@ -56,6 +61,8 @@ function Shell({
   user,
   profiles,
   activeProfileKey,
+  alerts,
+  vapidKey,
   children,
 }: ShellProps) {
   const [open, setOpen] = useState(false);
@@ -162,6 +169,12 @@ function Shell({
           <h1 className="flex-1 truncate text-sm font-semibold text-slate-900">
             {section.label}
           </h1>
+
+          <NotificationsBell
+            items={alerts.items}
+            daysBefore={alerts.daysBefore}
+            vapidKey={vapidKey}
+          />
 
           <ProfileSwitcher
             profiles={profiles}

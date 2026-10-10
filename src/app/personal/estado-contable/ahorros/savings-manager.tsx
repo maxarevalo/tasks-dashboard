@@ -35,6 +35,7 @@ import {
   type ReturnMode,
 } from "@/features/contable/types";
 import { dateLabel } from "@/lib/pf";
+import { MaturityBadge } from "@/components/maturity-badge";
 import type { Currency } from "@/lib/money";
 
 const CATEGORY_SUGGESTIONS = [
@@ -138,6 +139,9 @@ export function SavingsManager({
                     {a.return.mode === "monthly" &&
                       ` ${a.return.monthlyRatePct}%/mes`}
                   </p>
+                  {a.maturityDate && !a.archived && (
+                    <MaturityBadge date={a.maturityDate} />
+                  )}
                 </div>
                 <button
                   type="button"
@@ -305,6 +309,7 @@ function AccountForm({
   const [annualRatePct, setAnnualRatePct] = useState("");
   const [monthlyRatePct, setMonthlyRatePct] = useState("");
   const [manual, setManual] = useState<ManualRow[]>([]);
+  const [maturityDate, setMaturityDate] = useState("");
 
   const [syncedFor, setSyncedFor] = useState<string | null>(null);
   const key = `${open}-${editing?.id ?? "new"}`;
@@ -327,6 +332,7 @@ function AccountForm({
         ? String(editing.return.monthlyRatePct)
         : "",
     );
+    setMaturityDate(editing?.maturityDate ?? "");
     setManual(
       (editing?.manualProjections ?? []).map((m) => ({
         period: m.period,
@@ -358,6 +364,8 @@ function AccountForm({
               .filter((m) => m.period && m.amount !== "")
               .map((m) => ({ period: m.period, amount: Number(m.amount) }))
           : [],
+      // Solo las cuentas remuneradas tienen vencimiento.
+      maturityDate: mode === "none" ? "" : maturityDate,
     };
     exec(
       () =>
@@ -471,6 +479,30 @@ function AccountForm({
             ))}
           </Select>
         </Field>
+
+        {mode !== "none" && (
+          <Field
+            label="Vencimiento (opcional)"
+            hint="Ej. fin de un plazo fijo o de una tasa promocional: te avisamos antes"
+          >
+            <div className="flex gap-2">
+              <Input
+                type="date"
+                value={maturityDate}
+                onChange={(e) => setMaturityDate(e.target.value)}
+              />
+              {maturityDate && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setMaturityDate("")}
+                >
+                  Quitar
+                </Button>
+              )}
+            </div>
+          </Field>
+        )}
 
         {(mode === "tna" || mode === "tea") && (
           <Field

@@ -55,6 +55,9 @@ const savingsAccountSchema = new Schema(
       default: [],
     },
 
+    /** Vencimiento (YYYY-MM-DD) de una cuenta remunerada; "" si no tiene. */
+    maturityDate: { type: String, default: "" },
+
     archived: { type: Boolean, default: false },
   },
   { timestamps: true },

@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { sections } from "@/lib/nav";
 import { getActiveProfile } from "@/lib/profile";
+import { getUpcomingMaturities } from "@/features/vencimientos/queries";
 
 export default async function TrabajoLayout({
   children,
@@ -12,7 +13,10 @@ export default async function TrabajoLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const { active, profiles } = await getActiveProfile();
+  const [{ active, profiles }, alerts] = await Promise.all([
+    getActiveProfile(),
+    getUpcomingMaturities(),
+  ]);
 
   return (
     <DashboardShell
@@ -20,6 +24,8 @@ export default async function TrabajoLayout({
       user={session.user}
       profiles={profiles}
       activeProfileKey={active.key}
+      alerts={alerts}
+      vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null}
     >
       {children}
     </DashboardShell>

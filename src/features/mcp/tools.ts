@@ -37,6 +37,7 @@ import {
 import { getPfOverview } from "@/features/pf-dardo/queries";
 import { getAutoOverview } from "@/features/auto/queries";
 import { getWeightOverview } from "@/features/salud/queries";
+import { getUpcomingMaturities } from "@/features/vencimientos/queries";
 import {
   createWeightEntry,
   updateWeightEntry,
@@ -303,6 +304,7 @@ export function registerDashboardTools(server: McpServer) {
           disponibilidad: a.availability,
           rendimiento: a.return,
           recibe_excedente: a.receivesNet,
+          vencimiento: a.maturityDate || null,
         })),
       );
     }),
@@ -411,6 +413,30 @@ export function registerDashboardTools(server: McpServer) {
         cargas_combustible: fuel,
         proximos_services: upcoming,
         historial_services: records,
+      });
+    }),
+  );
+
+  server.registerTool(
+    "vencimientos",
+    {
+      title: "Próximos vencimientos",
+      description:
+        "Cuentas remuneradas y plazos fijos que vencen en los próximos días (o vencieron hace poco), con días restantes y monto.",
+      annotations: READ,
+    },
+    scoped(async () => {
+      const { items, daysBefore } = await getUpcomingMaturities();
+      return text({
+        avisar_dias_antes: daysBefore,
+        vencimientos: items.map((i) => ({
+          tipo: i.kind,
+          nombre: i.name,
+          fecha: i.date,
+          dias_restantes: i.daysLeft,
+          moneda: i.currency,
+          monto: i.amount,
+        })),
       });
     }),
   );
