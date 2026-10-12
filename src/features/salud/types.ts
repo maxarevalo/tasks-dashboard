@@ -49,3 +49,12 @@ export type WeightOverview = {
   /** Ordenados del más antiguo al más reciente. */
   milestones: WeightMilestoneDTO[];
 };
+
+export type GlucoseEntryDTO = {
+  id: string;
+  takenAt: DateTimeStr;
+  /** mg/dL */
+  value: number;
+  /** "Ayunas", "2 h después de comer"… */
+  context: string;
+};
