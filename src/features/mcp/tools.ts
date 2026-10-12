@@ -39,12 +39,14 @@ import {
 } from "@/features/contable/actions";
 import { getPfOverview } from "@/features/pf-dardo/queries";
 import { getAutoOverview } from "@/features/auto/queries";
-import { getWeightOverview } from "@/features/salud/queries";
+import { getGlucoseEntries, getWeightOverview } from "@/features/salud/queries";
 import { getUpcomingMaturities } from "@/features/vencimientos/queries";
 import {
   createWeightEntry,
   updateWeightEntry,
   createWeightMilestone,
+  createGlucoseEntry,
+  updateGlucoseEntry,
 } from "@/features/salud/actions";
 import {
   createFuelLog,
@@ -1275,6 +1277,81 @@ export function registerDashboardTools(server: McpServer) {
         "Medición actualizada.",
       );
     }),
+  );
+
+  server.registerTool(
+    "glucosa",
+    {
+      title: "Glucosa",
+      description:
+        "Últimas mediciones de glucosa en sangre (mg/dL) con id, fecha y hora y descripción (ej. Ayunas).",
+      inputSchema: z.object({ limite: z.number().int().min(1).max(200).default(30) }),
+      annotations: READ,
+    },
+    scoped(async ({ limite }: { limite?: number }) =>
+      text({ mediciones: (await getGlucoseEntries()).slice(0, limite ?? 30) }),
+    ),
+  );
+
+  server.registerTool(
+    "registrar_glucosa",
+    {
+      title: "Registrar glucosa",
+      description:
+        "Registra una medición de glucosa en sangre en mg/dL; por defecto con la fecha y hora actuales y la descripción \"Ayunas\".",
+      inputSchema: z.object({
+        mg_dl: z.number().min(20).max(600),
+        fecha_hora: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Formato YYYY-MM-DDTHH:mm")
+          .optional(),
+        descripcion: z.string().max(60).optional().describe("Ej. Ayunas, 2 h después de comer"),
+      }),
+      annotations: WRITE,
+    },
+    scoped(async (a: { mg_dl: number; fecha_hora?: string; descripcion?: string }) =>
+      act(
+        createGlucoseEntry({
+          takenAt: a.fecha_hora ?? today().dateTime,
+          value: a.mg_dl,
+          context: a.descripcion,
+        }),
+        `Glucosa de ${a.mg_dl} mg/dL registrada.`,
+      ),
+    ),
+  );
+
+  server.registerTool(
+    "editar_glucosa",
+    {
+      title: "Corregir una medición de glucosa",
+      description:
+        "Cambia el valor, la fecha y hora o la descripción de una medición (id de la herramienta glucosa).",
+      inputSchema: z.object({
+        id,
+        mg_dl: z.number().min(20).max(600).optional(),
+        fecha_hora: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Formato YYYY-MM-DDTHH:mm")
+          .optional(),
+        descripcion: z.string().max(60).optional(),
+      }),
+      annotations: WRITE,
+    },
+    scoped(
+      async (a: { id: string; mg_dl?: number; fecha_hora?: string; descripcion?: string }) => {
+        const cur = (await getGlucoseEntries()).find((e) => e.id === a.id);
+        if (!cur) return fail("No encontré esa medición (ver la herramienta glucosa).");
+        return act(
+          updateGlucoseEntry(a.id, {
+            takenAt: a.fecha_hora ?? cur.takenAt,
+            value: a.mg_dl ?? cur.value,
+            context: a.descripcion ?? cur.context,
+          }),
+          "Medición actualizada.",
+        );
+      },
+    ),
   );
 
   server.registerTool(

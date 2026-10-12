@@ -10,7 +10,7 @@ import { registerDashboardTools } from "@/features/mcp/tools";
 const handler = createMcpHandler(registerDashboardTools, {
   serverInfo: { name: "mi-dashboard", version: "1.0.0" },
   instructions:
-    "Dashboard personal de finanzas (gastos, ingresos, ahorros, proyección, estadísticas, plazos fijos, auto) y salud (peso). Montos en ARS o USD; meses en formato YYYY-MM. Llamá a `contexto` para saber la fecha de hoy y las etiquetas. Antes de pagar, cobrar, transferir o cerrar el mes, mostrale al usuario qué vas a hacer (montos y cuentas) y pedí confirmación.",
+    "Dashboard personal de finanzas (gastos, ingresos, ahorros, proyección, estadísticas, plazos fijos, auto) y salud (peso, glucosa). Montos en ARS o USD; meses en formato YYYY-MM. Llamá a `contexto` para saber la fecha de hoy y las etiquetas. Antes de pagar, cobrar, transferir o cerrar el mes, mostrale al usuario qué vas a hacer (montos y cuentas) y pedí confirmación.",
 });
 
 const authed = withMcpAuth(

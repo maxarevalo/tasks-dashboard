@@ -13,6 +13,7 @@ import {
   Car,
   HeartPulse,
   Scale,
+  Droplet,
   Plug,
   CircleHelp,
   type LucideIcon,
@@ -33,6 +34,7 @@ export type IconName =
   | "car"
   | "heart-pulse"
   | "scale"
+  | "droplet"
   | "plug"
   | "help";
 
@@ -51,6 +53,7 @@ export const iconMap: Record<IconName, LucideIcon> = {
   car: Car,
   "heart-pulse": HeartPulse,
   scale: Scale,
+  droplet: Droplet,
   plug: Plug,
   help: CircleHelp,
 };

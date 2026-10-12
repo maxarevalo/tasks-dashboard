@@ -50,13 +50,14 @@ export const sections: Record<Section["key"], Section> = {
   salud: {
     key: "salud",
     label: "Salud",
-    description: "Seguimiento de tu salud: peso y más.",
+    description: "Seguimiento de tu salud: peso, glucosa y más.",
     href: "/salud",
     icon: "heart-pulse",
     accent: "from-rose-500 to-pink-600",
     nav: [
       { label: "Resumen", href: "/salud", icon: "layout-dashboard" },
       { label: "Peso", href: "/salud/peso", icon: "scale" },
+      { label: "Glucosa", href: "/salud/glucosa", icon: "droplet" },
     ],
   },
 };

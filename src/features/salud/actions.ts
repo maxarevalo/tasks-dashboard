@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/request-context";
 import { connectToDatabase } from "@/lib/db";
 import { getActiveProfileKey } from "@/lib/profile";
-import { WeightEntry, WeightMilestone } from "@/models/salud";
+import { GlucoseEntry, WeightEntry, WeightMilestone } from "@/models/salud";
 import type { ActionResult } from "./types";
 
 const PATH = "/salud";
@@ -100,5 +100,48 @@ export async function updateWeightMilestone(
 export async function deleteWeightMilestone(id: string): Promise<ActionResult> {
   return run(async (uid) => {
     await WeightMilestone.deleteOne({ _id: id, userId: uid });
+  });
+}
+
+/* -------------------------------- Glucosa -------------------------------- */
+
+const glucoseInput = z.object({
+  takenAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Fecha y hora inválidas."),
+  value: z.coerce
+    .number()
+    .min(20, "La glucosa debe ser de al menos 20 mg/dL.")
+    .max(600, "La glucosa no puede superar los 600 mg/dL."),
+  context: z
+    .string()
+    .trim()
+    .max(60, "La descripción puede tener hasta 60 caracteres.")
+    .optional()
+    .transform((v) => v || "Ayunas"),
+});
+
+export async function createGlucoseEntry(
+  input: z.input<typeof glucoseInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = glucoseInput.parse(input);
+    await GlucoseEntry.create({ userId: uid, ...data });
+  });
+}
+
+export async function updateGlucoseEntry(
+  id: string,
+  input: z.input<typeof glucoseInput>,
+): Promise<ActionResult> {
+  return run(async (uid) => {
+    const data = glucoseInput.parse(input);
+    await GlucoseEntry.updateOne({ _id: id, userId: uid }, { $set: data });
+  });
+}
+
+export async function deleteGlucoseEntry(id: string): Promise<ActionResult> {
+  return run(async (uid) => {
+    await GlucoseEntry.deleteOne({ _id: id, userId: uid });
   });
 }

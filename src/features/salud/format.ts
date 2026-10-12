@@ -69,3 +69,19 @@ export function dayLabel(date: DateStr): string {
     .replaceAll(".", "")
     .replace(/ de /g, " ");
 }
+
+/** "113 mg/dL" */
+export function formatGlucose(value: number, withUnit = true): string {
+  const n = Math.round(value).toLocaleString("es-AR");
+  return withUnit ? `${n} mg/dL` : n;
+}
+
+/** true si la descripción es "ayunas" (sin importar mayúsculas/acentos). */
+export function isFasting(context: string): boolean {
+  return context
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .startsWith("ayuna");
+}
